@@ -1,0 +1,13 @@
+html, body {
+  margin: 0;
+  padding: 0;
+  background: black;
+  height: 100%;
+  overflow: hidden;
+}
+video {
+  width: 100vw;
+  height: 100vh;
+  object-fit: cover;
+  background: black;
+}
