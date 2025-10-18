@@ -1,5 +1,5 @@
 {
-    "downloadsPath": "F:VIDEOS PARA TELÃO\\novos",
+    "downloadsPath": "F:VIDEOS PARA TELÃO\\downloads",
     "maxConcurrentDownloads": 4,
     "maxConcurrentConversions": 2,
     "urls": ["https://www.youtube.com/@nikesb", "https://www.youtube.com/@XGames"],
