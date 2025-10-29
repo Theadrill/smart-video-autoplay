@@ -1,12 +1,14 @@
 {
     "downloadsPath": "F:\\VIDEOS PARA TELÃO\\downloads",
-    "selectedPath": "F:\\VIDEOS PARA TELÃO\\selected",
-    "targetGB": 40,  
+    "selectedPath": "H:\\VIDEOS",
+    "targetGB": 6.8,
+    "generateRandomNames": true,
+    "maxVideosPerChannelPerRound": 3,
     "maxConcurrentDownloads": 4,
     "maxConcurrentConversions": 2,
     "urls": ["https://www.youtube.com/@nikesb", "https://www.youtube.com/@XGames"],
     "includeKeywords": ["Best of", "Highlights", "Top moments", "Series", "Top 3"],
-    "excludeKeywords": ["Trailer", "Preview", "Podcast", "Invite"],
+    "excludeKeywords": ["Trailer", "Preview", "Podcast", "Invite", "PÊNALTIS"],
     "minDurationSeconds": 182,
     "ignoreShorts": true
 }
