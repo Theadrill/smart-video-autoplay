@@ -21,24 +21,46 @@ console.log("\n📂 Pastas onde os vídeos serão buscados:")
 downloadsPaths.forEach((p) => console.log("   →", p))
 
 // ==========================================================
-// 🎯 Detecta pasta ativa (a primeira que contém vídeos reais)
+// 🎯 Detecta pastas existentes e separa as que possuem vídeos
 // ==========================================================
-let activeDownloadsPath = null
+let pastasExistentes = [];
+let pastasComVideos = [];
+
 for (const p of downloadsPaths) {
-    if (fs.existsSync(p)) {
-        const hasMP4 = fs.readdirSync(p).some((f) => f.toLowerCase().endsWith(".mp4"))
-        if (hasMP4) {
-            activeDownloadsPath = p
-            break
-        }
+    if (!fs.existsSync(p)) {
+        console.log(`⚠️ Pasta NÃO existe: ${p}`);
+        continue;
     }
+
+    pastasExistentes.push(p);
+
+    const arquivos = fs.readdirSync(p);
+    const hasMP4 = arquivos.some((f) => f.toLowerCase().endsWith(".mp4"));
+
+    if (hasMP4) pastasComVideos.push(p);
+    else console.log(`⚠️ Pasta existe mas não contém vídeos .mp4: ${p}`);
 }
 
-// Se nenhuma tinha vídeo → usa a primeira mesmo
-if (!activeDownloadsPath) activeDownloadsPath = downloadsPaths[0]
+// Se nenhuma pasta existir → erro real
+if (pastasExistentes.length === 0) {
+    console.log("\n❌ Nenhuma pasta encontrada!");
+    console.log("Crie ao menos uma pasta listada no config.json.");
+    console.log("Encerrando servidor...\n");
+    process.exit(1);
+}
 
-console.log("\n✅ Pasta selecionada automaticamente:")
-console.log("   🎯 " + activeDownloadsPath + "\n")
+// Se existir pasta mas nenhuma tem vídeo → escolher a primeira existente
+let activeDownloadsPath = pastasComVideos.length > 0 ? pastasComVideos[0] : pastasExistentes[0];
+
+console.log("\n✅ Pasta selecionada automaticamente:");
+console.log("   🎯 " + activeDownloadsPath + "\n");
+
+// Caso esteja vazia → avisar mas continuar
+if (pastasComVideos.length === 0) {
+    console.log("⚠️ Nenhum vídeo encontrado ainda.");
+    console.log("   → O servidor está rodando e aguardando vídeos serem adicionados.\n");
+}
+
 
 // ==========================================================
 // Estado da rodada
@@ -104,6 +126,31 @@ function syncDatabase() {
 console.log("🔄 Sincronizando database com arquivos atuais...\n")
 database = syncDatabase()
 loadRoundState()
+
+// ==========================================================
+// 👀 Auto-Atualização da Database quando arquivos mudarem
+// ==========================================================
+let watchTimeout = null
+
+function triggerResync() {
+    clearTimeout(watchTimeout)
+    watchTimeout = setTimeout(() => {
+        console.log("\n🔄 Detectado mudança na pasta → Re-sincronizando database...\n")
+        database = syncDatabase()
+    }, 1200) // evita rodar 20x seguidas durante cópia
+}
+
+for (const folder of downloadsPaths) {
+    if (!fs.existsSync(folder)) continue
+    console.log("👀 Observando:", folder)
+
+    fs.watch(folder, { persistent: true }, (event, filename) => {
+        if (filename && filename.toLowerCase().endsWith(".mp4")) {
+            triggerResync()
+        }
+    })
+}
+
 
 function randomChoice(arr) {
     return arr[Math.floor(Math.random() * arr.length)]

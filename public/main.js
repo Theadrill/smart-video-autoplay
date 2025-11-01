@@ -5,12 +5,18 @@ async function nextVideo() {
     const res = await fetch("/api/next")
     const data = await res.json()
 
+    const noVideos = document.getElementById("no-videos")
+    const player = document.getElementById("player")
+
     if (!data.file) {
-        console.log("⚠️ Nenhum arquivo retornado, recarregando...")
-        return location.reload()
+        console.log("⚠️ Nenhum vídeo disponível no servidor.")
+        noVideos.classList.add("visible")
+        player.src = "" // garante que pare o vídeo atual caso exista
+        return
     }
 
-    const player = document.getElementById("player")
+    noVideos.classList.remove("visible")
+
     player.src = `/video/${encodeURIComponent(data.file)}`
     player.muted = true
 
@@ -18,6 +24,7 @@ async function nextVideo() {
         console.log("⚠️ player.play() falhou, tentando novamente.")
     })
 }
+
 
 // ==========================================================
 // ⏪ Função: Vídeo anterior
