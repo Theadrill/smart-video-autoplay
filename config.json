@@ -1,6 +1,10 @@
 {
-    "downloadsPath": "F:\\VIDEOS PARA TELÃO\\downloads",
-    "selectedPath": "H:\\VIDEOS",
+    "downloadsPath": [
+  "D:\\VIDEOS PARA TELÃO\\downloads",
+  "E:\\VIDEOS PARA TELÃO\\downloads",
+  "F:\\VIDEOS PARA TELÃO\\downloads"
+],
+    "selectedPath": "D:\\VIDEOS",
     "targetGB": 6.8,
     "generateRandomNames": true,
     "maxVideosPerChannelPerRound": 3,

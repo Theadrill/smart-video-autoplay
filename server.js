@@ -8,158 +8,119 @@ const app = express()
 app.use(cors())
 app.use(express.static("public"))
 
-// Configurações
+// Carrega config
 const config = JSON.parse(fs.readFileSync(path.resolve("config.json"), "utf8"))
-const downloadsPath = path.resolve(config.downloadsPath)
+
+// Agora downloadsPath é ARRAY
+const downloadsPaths = Array.isArray(config.downloadsPath)
+  ? config.downloadsPath.map(p => path.resolve(p))
+  : [path.resolve(config.downloadsPath)]
+
 const dbPath = path.resolve("database.json")
 const roundStatePath = path.resolve("roundState.json")
 
-// Estado da rodada persistente
-let roundState = {
-    playedVideos: new Set(),
-    playedChannelsThisRound: new Set(),
-}
+console.log("\n📂 Pastas onde os vídeos serão buscados:")
+downloadsPaths.forEach(p => console.log("   →", p))
+
+// Estado da rodada
+let roundState = { playedVideos: new Set(), playedChannelsThisRound: new Set() }
 
 function loadRoundState() {
-    try {
-        if (fs.existsSync(roundStatePath)) {
-            const data = JSON.parse(fs.readFileSync(roundStatePath, "utf8"))
-            roundState.playedVideos = new Set(data.playedVideos || [])
-            roundState.playedChannelsThisRound = new Set(data.playedChannelsThisRound || [])
-            console.log("Estado da rodada carregado.")
-        }
-    } catch (err) {
-        console.error("Erro ao carregar estado da rodada:", err)
+  try {
+    if (fs.existsSync(roundStatePath)) {
+      const data = JSON.parse(fs.readFileSync(roundStatePath, "utf8"))
+      roundState.playedVideos = new Set(data.playedVideos || [])
+      roundState.playedChannelsThisRound = new Set(data.playedChannelsThisRound || [])
+      console.log("🔁 Estado da rodada carregado.")
     }
+  } catch {}
 }
 
 function saveRoundState() {
-    const data = {
-        playedVideos: [...roundState.playedVideos],
-        playedChannelsThisRound: [...roundState.playedChannelsThisRound],
-    }
-    try {
-        fs.writeFileSync(roundStatePath, JSON.stringify(data, null, 2))
-    } catch (err) {
-        console.error("Erro ao salvar estado da rodada:", err)
-    }
+  fs.writeFileSync(
+    roundStatePath,
+    JSON.stringify({
+      playedVideos: [...roundState.playedVideos],
+      playedChannelsThisRound: [...roundState.playedChannelsThisRound]
+    }, null, 2)
+  )
 }
 
-// Função para contar vídeos na database
-function countDBItems(db) {
-    return Object.values(db).reduce((acc, arr) => acc + arr.length, 0)
+// == NOVO: Localiza arquivo real e loga de qual pasta veio ==
+function findFileInDownloads(file) {
+  for (const base of downloadsPaths) {
+    const full = path.join(base, file)
+    if (fs.existsSync(full)) {
+      return full
+    }
+  }
+  return null
 }
 
-// Sincroniza database com arquivos
+// Reconstrói database conforme múltiplas pastas
 function syncDatabase() {
-    const files = fs.readdirSync(downloadsPath).filter((f) => f.endsWith(".mp4"))
-    let db = {}
-    if (fs.existsSync(dbPath)) {
-        try {
-            db = JSON.parse(fs.readFileSync(dbPath, "utf-8"))
-        } catch {
-            db = {}
-        }
-    }
-    const dbCount = countDBItems(db)
-    const fileCount = files.length
-
-    if (dbCount !== fileCount) {
-        console.log("Diferença detectada nos arquivos, rodando generateDatabase.js...")
-        execSync("node generateDatabase.js", { stdio: "inherit" })
-    } else {
-        let needsUpdate = false
-        for (const canal of Object.keys(db)) {
-            if (
-                db[canal].some((entry) => !files.includes(entry.arquivo)) ||
-                files.some((f) => {
-                    const c = f.split(" - ")[0]?.trim()
-                    return c === canal && !db[canal].find((e) => e.arquivo === f)
-                })
-            ) {
-                needsUpdate = true
-                break
-            }
-        }
-        if (needsUpdate) {
-            console.log("Arquivos incoerentes com database.json, rodando generateDatabase.js...")
-            execSync("node generateDatabase.js", { stdio: "inherit" })
-        } else {
-            console.log("Database já está sincronizada.")
-        }
-    }
+  execSync("node generateDatabase.js", { stdio: "inherit" })
+  return JSON.parse(fs.readFileSync(dbPath, "utf-8"))
 }
 
-syncDatabase()
-
-let database = {}
-try {
-    database = JSON.parse(fs.readFileSync(dbPath, "utf-8"))
-} catch (e) {
-    console.error("Erro ao ler database.json:", e)
-}
-
+let database = syncDatabase()
 loadRoundState()
 
 function randomChoice(arr) {
-    return arr[Math.floor(Math.random() * arr.length)]
+  return arr[Math.floor(Math.random() * arr.length)]
 }
 
+// == API para escolher próximo vídeo ==
 app.get("/api/next", (req, res) => {
-    const canais = Object.keys(database)
-    if (canais.length === 0) return res.json({ file: null })
+  const canais = Object.keys(database)
+  if (canais.length === 0) return res.json({ file: null })
 
-    // Quando terminar a rodada (todos os canais já tocados)
-    if (roundState.playedChannelsThisRound.size === canais.length) {
-        // Log detalhado antes de limpar
-        console.log(`Fim da rodada! Total de canais tocados: ${roundState.playedChannelsThisRound.size}`)
-        console.log(`Total de vídeos tocados na rodada: ${[...roundState.playedVideos].filter((videoArquivo) => Object.values(database).some((videos) => videos.some((v) => v.arquivo === videoArquivo))).length}`)
+  // Se todos os canais já tocaram → reinicia rodada
+  if (roundState.playedChannelsThisRound.size === canais.length) {
+    console.log("\n🔄 Fim da rodada → Resetando canais.")
+    roundState.playedChannelsThisRound.clear()
+  }
 
-        roundState.playedChannelsThisRound.clear()
-        console.log("Iniciando nova rodada, canais resetados")
-    }
+  const canaisDisponiveis = canais.filter(c => !roundState.playedChannelsThisRound.has(c))
+  const canal = randomChoice(canaisDisponiveis)
+  const videos = database[canal]
 
-    let canaisDisponiveis = canais.filter((c) => !roundState.playedChannelsThisRound.has(c))
-    if (canaisDisponiveis.length === 0) {
-        roundState.playedChannelsThisRound.clear()
-        canaisDisponiveis = [...canais]
-    }
+  let naoTocados = videos.filter(v => !roundState.playedVideos.has(v.arquivo))
+  if (naoTocados.length === 0) naoTocados = [...videos]
 
-    const canalSorteado = randomChoice(canaisDisponiveis)
+  const escolhido = randomChoice(naoTocados)
 
-    const videosDoCanal = database[canalSorteado]
-    let videosDisponiveis = videosDoCanal.filter((v) => !roundState.playedVideos.has(v.arquivo))
+  roundState.playedChannelsThisRound.add(canal)
+  roundState.playedVideos.add(escolhido.arquivo)
+  saveRoundState()
 
-    if (videosDisponiveis.length === 0) {
-        videosDisponiveis = [...videosDoCanal]
-    }
+  console.log(`\n🎬 Canal: ${canal}`)
+  console.log(`🎞 Vídeo sorteado: ${escolhido.video}`)
+  console.log(`📁 Arquivo: ${escolhido.arquivo}`)
 
-    const videoSorteado = randomChoice(videosDisponiveis)
-
-    // Salva os estados ANTES de modificar para exibir logs corretos
-    const canalJaTocado = roundState.playedChannelsThisRound.has(canalSorteado)
-    const videoJaTocado = roundState.playedVideos.has(videoSorteado.arquivo)
-
-    roundState.playedChannelsThisRound.add(canalSorteado)
-    roundState.playedVideos.add(videoSorteado.arquivo)
-
-    saveRoundState()
-
-    console.log(`Canal sorteado: ${canalSorteado}`)
-    console.log(`Canal já foi tocado nesta rodada? ${canalJaTocado ? "Sim" : "Não"}`)
-    console.log(`Vídeo sorteado: ${videoSorteado.video}`)
-    console.log(`Já foi tocado? ${videoJaTocado ? "Sim" : "Não"}`)
-
-    res.json({ file: videoSorteado.arquivo })
+  return res.json({ file: escolhido.arquivo })
 })
 
+// == SERVE O VÍDEO ==
 app.get("/video/:name", (req, res) => {
-    const filePath = path.join(downloadsPath, req.params.name)
-    if (!fs.existsSync(filePath)) return res.status(404).send("Arquivo não encontrado")
-    res.sendFile(filePath)
+  const file = req.params.name
+  const located = findFileInDownloads(file)
+
+  if (!located) {
+    if (!req.headers.range) {
+      console.log(`❌ Arquivo não encontrado: ${file}`)
+    }
+    return res.status(404).send("Arquivo não encontrado")
+  }
+
+  // Loga apenas 1x quando o vídeo realmente começa, ignorando streaming parcial
+  if (!req.headers.range) {
+    console.log(`▶️ Tocando agora: ${file}`)
+    console.log(`   📍 Origem real: ${located}`)
+  }
+
+  res.sendFile(located)
 })
 
 const PORT = process.env.PORT || 3000
-app.listen(PORT, () => {
-    console.log(`Servidor rodando: http://localhost:${PORT}`)
-})
+app.listen(PORT, () => console.log(`\n✅ Servidor rodando: http://localhost:${PORT}\n`))

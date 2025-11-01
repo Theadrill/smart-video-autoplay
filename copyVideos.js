@@ -1,293 +1,362 @@
-import fs from "fs"
-import path from "path"
-import readline from "readline"
-import { fileURLToPath } from "url"
+/**
+ * selectVideos.js — Versão COMPLETA com Log VERBOSO
+ * ------------------------------------------------------------------------------
+ * Este script copia vídeos das pastas originais (downloadsPath[]) para a pasta
+ * final (selectedPath), levando em conta limite de GB, rodízio por partes,
+ * limite por canal por rodada, embaralhamento final sem repetir canal,
+ * prefixação numérica, manifest incremental, reembalhamento e redução equilibrada.
+ *
+ * Logs são EXTREMAMENTE descritivos. Se a TV Box for fraca, recomenda-se rodar
+ * isso no PC antes de copiar para ela.
+ * ------------------------------------------------------------------------------
+ */
 
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
+import fs from "fs";
+import path from "path";
+import readline from "readline";
 
-// Load config
-const cfg = JSON.parse(fs.readFileSync("config.json", "utf8"))
-const DOWNLOADS = path.resolve(cfg.downloadsPath)
-const SELECTED = path.resolve(cfg.selectedPath)
-const TARGET_GB = Number(cfg.targetGB) || 40
-const TARGET_BYTES = TARGET_GB * 1024 * 1024 * 1024
-const RANDOMIZE = cfg.generateRandomNames === true
-const MAX_PER_ROUND = Number(cfg.maxVideosPerChannelPerRound) || 0
+/* ==========================
+   📂 CARREGAR CONFIG
+   ========================== */
+const config = JSON.parse(fs.readFileSync("config.json", "utf8"));
 
-const MANIFEST_PATH = path.join(SELECTED, "selected_manifest.json")
+const DOWNLOAD_DIRS = Array.isArray(config.downloadsPath)
+  ? config.downloadsPath.map(p => path.resolve(p))
+  : [path.resolve(config.downloadsPath)];
 
-// Helpers
-function humanBytes(bytes) {
-    const units = ["B", "KB", "MB", "GB", "TB"]
-    if (bytes === 0) return "0 B"
-    const i = Math.floor(Math.log(bytes) / Math.log(1024))
-    return (bytes / Math.pow(1024, i)).toFixed(i < 2 ? 0 : 2) + " " + units[i]
+const SELECTED_DIR = path.resolve(config.selectedPath);
+if (!fs.existsSync(SELECTED_DIR)) fs.mkdirSync(SELECTED_DIR, { recursive: true });
+
+const TARGET_GB = Number(config.targetGB) || 40;
+const TARGET_BYTES = TARGET_GB * 1024 * 1024 * 1024;
+
+const GENERATE_RANDOM_NAMES = config.generateRandomNames === true;
+const MAX_VIDEOS_PER_CHANNEL_PER_ROUND = Number(config.maxVideosPerChannelPerRound) || 0;
+
+const MANIFEST_PATH = path.join(SELECTED_DIR, "selected_manifest.json");
+
+/* ==========================
+   🧰 FUNÇÕES ÚTEIS
+   ========================== */
+function human(bytes) {
+  const u = ["B", "KB", "MB", "GB"];
+  let i = 0;
+  while (bytes >= 1024 && i < u.length - 1) {
+    bytes /= 1024;
+    i++;
+  }
+  return `${bytes.toFixed(i < 2 ? 0 : 2)} ${u[i]}`;
 }
 
 function shuffle(arr) {
-    for (let i = arr.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1))
-        ;[arr[i], arr[j]] = [arr[j], arr[i]]
-    }
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
 }
 
 function ask(q) {
-    return new Promise((resolve) => {
-        const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
-        rl.question(q, (ans) => {
-            rl.close()
-            resolve(ans.trim().toLowerCase())
-        })
-    })
+  return new Promise(r => {
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    rl.question(q, ans => {
+      rl.close();
+      r(ans.trim().toLowerCase());
+    });
+  });
 }
 
+/* ==========================
+   🔎 PARSE DE NOME DE ARQUIVO
+   ========================== */
 function stripPrefix(name) {
-    return name.replace(/^\d{4}\s*-\s*/, "").trim()
+  return name.replace(/^\d{4}\s*-\s*/, "").trim();
 }
 
-function parseFileName(originalName) {
-    const base = originalName.replace(/\.mp4$/i, "")
-    const parts = base.split(" - ")
-    const canal = parts[0].trim()
-    const resto = parts.slice(1).join(" - ").trim()
-    const m = resto.match(/parte\s+(\d+)/i)
-    let parte = 1
-    let titulo = resto
-    if (m) {
-        parte = parseInt(m[1], 10)
-        titulo = resto.replace(m[0], "").trim()
-    }
-    return { canal, file: `${canal} - ${titulo}${m ? ` parte ${parte}` : ""}.mp4`, parte, titulo }
+function parseFileName(name) {
+  const noExt = name.replace(/\.mp4$/i, "");
+  const parts = noExt.split(" - ");
+  const canal = parts[0]?.trim() || "Desconhecido";
+
+  const resto = parts.slice(1).join(" - ");
+  const matchP = resto.match(/parte\s+(\d+)/i);
+  let parte = 1;
+  let titulo = resto;
+
+  if (matchP) {
+    parte = parseInt(matchP[1], 10);
+    titulo = resto.replace(matchP[0], "").trim();
+  }
+
+  const original = `${canal} - ${titulo}${matchP ? ` parte ${parte}` : ""}.mp4`;
+  return { canal, file: original, titulo, parte };
 }
 
+/* ==========================
+   💾 MANIFEST
+   ========================== */
 function loadManifest() {
-    if (!fs.existsSync(MANIFEST_PATH)) return null
-    try {
-        return JSON.parse(fs.readFileSync(MANIFEST_PATH, "utf8")).videos || null
-    } catch {
-        return null
-    }
+  if (!fs.existsSync(MANIFEST_PATH)) return null;
+  try {
+    return JSON.parse(fs.readFileSync(MANIFEST_PATH, "utf8")).videos || null;
+  } catch {
+    return null;
+  }
 }
 
-function saveManifest(manifest) {
-    const total = manifest.reduce((acc, v) => acc + (v.size || 0), 0)
-    fs.writeFileSync(
-        MANIFEST_PATH,
-        JSON.stringify(
-            {
-                targetGB: TARGET_GB,
-                finalGB: (total / 1024 ** 3).toFixed(2),
-                count: manifest.length,
-                videos: manifest,
-            },
-            null,
-            2
-        )
-    )
+function saveManifest(list) {
+  const total = list.reduce((a, b) => a + (b.size || 0), 0);
+  fs.writeFileSync(MANIFEST_PATH, JSON.stringify({
+    targetGB: TARGET_GB,
+    finalGB: (total / (1024 ** 3)).toFixed(2),
+    count: list.length,
+    videos: list
+  }, null, 2));
+  console.log(`💾 Manifest salvo  |  ${list.length} vídeos  |  ${human(total)}`);
 }
 
-// ============ 🔀 REORDER & RENAME ============
-async function reorderAndRename(manifest) {
-    console.log("🔀 Reordenando vídeos (sem repetir canal, ordem randômica de canais por rodada)...")
-
-    const byChannel = {}
-    manifest.forEach((v) => {
-        if (!byChannel[v.canal]) byChannel[v.canal] = []
-        byChannel[v.canal].push(v)
-    })
-    Object.keys(byChannel).forEach((c) => shuffle(byChannel[c]))
-
-    const final = []
-    while (true) {
-        const active = Object.keys(byChannel).filter((c) => byChannel[c].length > 0)
-        if (!active.length) break
-        shuffle(active)
-        active.forEach((c) => final.push(byChannel[c].shift()))
-    }
-
-    let i = 1
-    for (const v of final) {
-        const prefix = String(i).padStart(4, "0")
-        const newName = `${prefix} - ${v.file}`
-        const oldPath = path.join(SELECTED, v.finalName || v.file)
-        const newPath = path.join(SELECTED, newName)
-        if (fs.existsSync(oldPath)) fs.renameSync(oldPath, newPath)
-        v.finalName = newName
-        i++
-    }
-
-    manifest.length = 0
-    final.forEach((v) => manifest.push(v))
+function rebuildManifest() {
+  console.log("⚠️ Manifest ausente → reconstruindo a partir da pasta destino...");
+  const mp4s = fs.readdirSync(SELECTED_DIR).filter(f => f.toLowerCase().endsWith(".mp4"));
+  const manifest = mp4s.map(name => {
+    const original = stripPrefix(name);
+    const { canal, file, parte, titulo } = parseFileName(original);
+    const size = fs.statSync(path.join(SELECTED_DIR, name)).size;
+    return { canal, file, parte, titulo, size, finalName: name };
+  });
+  console.log(`✅ Manifest reconstruído: ${manifest.length} vídeos.`);
+  return manifest;
 }
 
-// ============ 🗑️ REDUÇÃO ============
-async function reduceToTarget(manifest) {
-    console.log("\n⚠️ Tamanho excedeu o limite. Iniciando redução equilibrada por canal.\n")
+/* ==========================
+   🔍 DETECTAR ALTERAÇÕES MANUAIS
+   ========================== */
+function detectManualChanges(manifest) {
+  const disk = fs.readdirSync(SELECTED_DIR).filter(f => f.toLowerCase().endsWith(".mp4"));
+  const manifestNames = manifest.map(v => v.finalName || v.file);
 
-    let total = manifest.reduce((acc, v) => acc + v.size, 0)
+  const removed = manifestNames.filter(n => !disk.includes(n));
+  const added = disk.filter(n => !manifestNames.includes(n));
 
-    while (total > TARGET_BYTES) {
-        const byChannel = {}
-        manifest.forEach((v) => {
-            if (!byChannel[v.canal]) byChannel[v.canal] = []
-            byChannel[v.canal].push(v)
-        })
-
-        const canais = Object.keys(byChannel)
-        shuffle(canais)
-
-        let removed = false
-
-        for (const canal of canais) {
-            const list = byChannel[canal]
-            if (!list.length) continue
-
-            const item = list.pop()
-            const filePath = path.join(SELECTED, item.finalName || item.file)
-
-            if (fs.existsSync(filePath)) {
-                fs.unlinkSync(filePath)
-                console.log(`🗑️ Removido: ${item.finalName || item.file} (${humanBytes(item.size)})`)
-            }
-
-            const idx = manifest.findIndex((v) => v.finalName === item.finalName || v.file === item.file)
-            if (idx !== -1) manifest.splice(idx, 1)
-
-            total = manifest.reduce((a, v) => a + v.size, 0)
-            console.log(`📉 Total agora: ${humanBytes(total)} / ${humanBytes(TARGET_BYTES)}`)
-
-            removed = true
-            if (total <= TARGET_BYTES) break
-        }
-
-        if (!removed) break
-    }
-
-    console.log("\n♻️ Reordenando após redução...")
-    await reorderAndRename(manifest)
-    saveManifest(manifest)
+  return { changed: removed.length || added.length, removed, added };
 }
 
-// ============ 🚀 EXECUÇÃO PRINCIPAL ============
-;(async () => {
-    console.log("\n==============================================")
-    console.log("🚀 Smart Video Selection - v3 (Verbose Mode ON)")
-    console.log("==============================================\n")
+function reconcile(manifest, removed, added) {
+  manifest = manifest.filter(v => !removed.includes(v.finalName || v.file));
+  added.forEach(a => {
+    const base = stripPrefix(a);
+    const { canal, file, parte, titulo } = parseFileName(base);
+    const size = fs.statSync(path.join(SELECTED_DIR, a)).size;
+    manifest.push({ canal, file, parte, titulo, size, finalName: a });
+  });
+  manifest.forEach(v => {
+    v.size = fs.statSync(path.join(SELECTED_DIR, v.finalName || v.file)).size;
+  });
+  return manifest;
+}
 
-    if (!fs.existsSync(SELECTED)) fs.mkdirSync(SELECTED, { recursive: true })
+/* ==========================
+   🔀 REORDENAR SEM REPETIR CANAL
+   ========================== */
+async function reorder(manifest) {
+  console.log("🔀 Reordenando (não repetir canal; embaralhar canais a cada rodada)...");
+  const groups = {};
+  manifest.forEach(v => {
+    if (!groups[v.canal]) groups[v.canal] = [];
+    groups[v.canal].push(v);
+  });
+  Object.keys(groups).forEach(c => shuffle(groups[c]));
 
-    let manifest = loadManifest()
-    let hadManifest = !!manifest
+  const ordered = [];
+  while (true) {
+    const vivos = Object.keys(groups).filter(c => groups[c].length);
+    if (!vivos.length) break;
+    shuffle(vivos);
+    vivos.forEach(c => {
+      const item = groups[c].shift();
+      if (item) ordered.push(item);
+    });
+  }
 
-    if (!manifest) {
-        console.log("📄 Manifest não encontrado → reconstruindo...")
-        manifest = []
-        const mp4s = fs.readdirSync(SELECTED).filter((f) => f.toLowerCase().endsWith(".mp4"))
-        for (const f of mp4s) {
-            const original = stripPrefix(f)
-            const info = parseFileName(original)
-            const size = fs.statSync(path.join(SELECTED, f)).size
-            manifest.push({ ...info, size, finalName: f })
-        }
-        saveManifest(manifest)
-        console.log("✅ Manifest reconstruído.\n")
+  let idx = 1;
+  ordered.forEach(v => {
+    const prefix = String(idx).padStart(4, "0");
+    const oldName = v.finalName || v.file;
+    const oldPath = path.join(SELECTED_DIR, oldName);
+    const newName = `${prefix} - ${v.file}`;
+    const newPath = path.join(SELECTED_DIR, newName);
+    if (fs.existsSync(oldPath)) fs.renameSync(oldPath, newPath);
+    v.finalName = newName;
+    idx++;
+  });
+
+  manifest.length = 0;
+  ordered.forEach(x => manifest.push(x));
+  console.log("✅ Reordenação concluída.");
+}
+
+/* ==========================
+   📉 REDUÇÃO EQUILIBRADA
+   ========================== */
+async function reduce(manifest) {
+  console.log("⚠️ Tamanho excedido → iniciando remoção equilibrada por canal...");
+
+  function getTotal() { return manifest.reduce((a, b) => a + (b.size || 0), 0); }
+
+  while (getTotal() > TARGET_BYTES) {
+    const groups = {};
+    manifest.forEach(v => {
+      if (!groups[v.canal]) groups[v.canal] = [];
+      groups[v.canal].push(v);
+    });
+    Object.keys(groups).forEach(c => groups[c].sort((a, b) => b.parte - a.parte)); // remover últimas partes primeiro
+    shuffle(Object.keys(groups));
+
+    for (const canal of Object.keys(groups)) {
+      const remove = groups[canal].pop();
+      if (!remove) continue;
+      const p = path.join(SELECTED_DIR, remove.finalName || remove.file);
+      if (fs.existsSync(p)) {
+        console.log(`🗑️ Removendo: ${remove.finalName || remove.file}`);
+        fs.unlinkSync(p);
+      }
+      manifest.splice(manifest.indexOf(remove), 1);
+      if (getTotal() <= TARGET_BYTES) break;
+    }
+  }
+
+  console.log("♻️ Reordenando após remoção...");
+  await reorder(manifest);
+  saveManifest(manifest);
+}
+
+/* ==========================
+   🚚 CÓPIA INCREMENTAL (RODÍZIO)
+   ========================== */
+async function copyIncremental(manifest) {
+  const have = new Set(manifest.map(v => v.file));
+
+  console.log("📥 Lendo fontes e agrupando por canal e parte...");
+  const groups = {};
+
+  for (const dir of DOWNLOAD_DIRS) {
+    if (!fs.existsSync(dir)) continue;
+    const files = fs.readdirSync(dir).filter(f => f.endsWith(".mp4"));
+    for (const f of files) {
+      const info = parseFileName(f);
+      if (have.has(info.file)) continue;
+      if (!groups[info.canal]) groups[info.canal] = {};
+      if (!groups[info.canal][info.parte]) groups[info.canal][info.parte] = [];
+      groups[info.canal][info.parte].push({ ...info, folder: dir });
+    }
+  }
+
+  Object.keys(groups).forEach(c =>
+    Object.keys(groups[c]).forEach(p => shuffle(groups[c][p]))
+  );
+
+  let total = manifest.reduce((a, b) => a + (b.size || 0), 0);
+  let parteAtual = 1;
+  let moved = false;
+
+  while (total < TARGET_BYTES) {
+    console.log(`🔄 Rodada — Parte ${parteAtual}`);
+
+    let addedThisRound = false;
+    for (const canal of Object.keys(groups)) {
+      let list = groups[canal][parteAtual];
+      if (!list || !list.length) continue;
+
+      const take = MAX_VIDEOS_PER_CHANNEL_PER_ROUND === 0
+        ? list.length
+        : Math.min(list.length, MAX_VIDEOS_PER_CHANNEL_PER_ROUND);
+
+      const pick = list.splice(0, take);
+
+      for (const info of pick) {
+        const src = path.join(info.folder, info.file);
+        const dst = path.join(SELECTED_DIR, info.file);
+        if (!fs.existsSync(src)) continue;
+
+        const size = fs.statSync(src).size;
+        console.log(`📥 Copiando: ${info.file} (${human(size)})`);
+        fs.copyFileSync(src, dst);
+
+        manifest.push({ ...info, finalName: info.file, size });
+        total += size;
+        moved = true;
+        addedThisRound = true;
+
+        console.log(`   📊 Acumulado: ${human(total)} / ${human(TARGET_BYTES)}`);
+        if (total >= TARGET_BYTES) break;
+      }
     }
 
-    // Refresh sizes + detect manual changes
-    const beforeCount = manifest.length
-    const beforeFiles = manifest.map((v) => v.finalName || v.file)
-
-    const filesNow = fs.readdirSync(SELECTED).filter((f) => f.toLowerCase().endsWith(".mp4"))
-
-    if (beforeFiles.length !== filesNow.length || beforeFiles.some((f) => !filesNow.includes(f))) {
-        console.log("⚠️ Alterações manuais detectadas → ajustando manifest + reorder automático...")
-        manifest = []
-        for (const f of filesNow) {
-            const original = stripPrefix(f)
-            const info = parseFileName(original)
-            const size = fs.statSync(path.join(SELECTED, f)).size
-            manifest.push({ ...info, size, finalName: f })
-        }
-        await reorderAndRename(manifest)
-        saveManifest(manifest)
+    if (!addedThisRound) {
+      parteAtual++;
+      const existsNext = Object.keys(groups).some(
+        c => groups[c][parteAtual] && groups[c][parteAtual].length
+      );
+      if (!existsNext) break;
     }
+  }
 
-    let currentTotal = manifest.reduce((acc, v) => acc + v.size, 0)
-    console.log(`📊 Tamanho atual: ${humanBytes(currentTotal)} / ${humanBytes(TARGET_BYTES)}\n`)
+  return moved;
+}
 
-    // If above limit → reduce
-    if (currentTotal > TARGET_BYTES) {
-        await reduceToTarget(manifest)
-        console.log("✅ Redução concluída.\n")
-        process.exit(0)
+/* ==========================
+   🚀 EXECUÇÃO PRINCIPAL
+   ========================== */
+(async () => {
+  console.log("============================================================");
+  console.log("🚀 SCRIPT DE SELEÇÃO DE VÍDEOS (LOG VERBOSO ATIVADO)");
+  console.log("============================================================\n");
+
+  console.log("📂 Pastas de origem:");
+  DOWNLOAD_DIRS.forEach(d => console.log("   →", d));
+  console.log(`📦 Pasta destino: ${SELECTED_DIR}`);
+  console.log(`🎯 Limite: ${TARGET_GB} GB (${human(TARGET_BYTES)})`);
+  console.log(`🎛️ Limite por canal/rodada: ${MAX_VIDEOS_PER_CHANNEL_PER_ROUND || "Ilimitado"}`);
+  console.log(`🔀 Embaralhamento final: ${GENERATE_RANDOM_NAMES ? "ATIVADO" : "DESATIVADO"}`);
+  console.log("------------------------------------------------------------\n");
+
+  let manifest = loadManifest();
+  if (!manifest) manifest = rebuildManifest();
+  else console.log(`📄 Manifest carregado (${manifest.length} vídeos)\n`);
+
+  const { changed, removed, added } = detectManualChanges(manifest);
+  if (changed) {
+    console.log("🛠 Atualizando manifest devido a alterações manuais...");
+    manifest = reconcile(manifest, removed, added);
+    saveManifest(manifest);
+  }
+
+  const current = manifest.reduce((a, b) => a + (b.size || 0), 0);
+  console.log(`📊 Tamanho atual: ${human(current)} / ${human(TARGET_BYTES)}\n`);
+
+  if (current > TARGET_BYTES) {
+    await reduce(manifest);
+    process.exit(0);
+  }
+
+  const moved = await copyIncremental(manifest);
+  saveManifest(manifest);
+
+  if (GENERATE_RANDOM_NAMES) {
+    if (moved || changed) {
+      console.log("🔁 Reordenando automaticamente (novos vídeos ou mudanças detectadas)...");
+      await reorder(manifest);
+      saveManifest(manifest);
+    } else {
+      const ans = await ask("Nenhuma alteração. Re-embaralhar mesmo assim? (y/n): ");
+      if (ans === "y") {
+        await reorder(manifest);
+        saveManifest(manifest);
+      }
     }
+  }
 
-    // If under limit → copy more
-    console.log("📥 Procurando vídeos novos para copiar...\n")
+  const final = manifest.reduce((a, b) => a + (b.size || 0), 0);
+  if (final > TARGET_BYTES) await reduce(manifest);
 
-    const allDownloads = fs.readdirSync(DOWNLOADS).filter((f) => f.toLowerCase().endsWith(".mp4"))
-    const grouped = {}
-
-    allDownloads.forEach((f) => {
-        const info = parseFileName(f)
-        if (!manifest.some((m) => m.file === info.file)) {
-            if (!grouped[info.canal]) grouped[info.canal] = {}
-            if (!grouped[info.canal][info.parte]) grouped[info.canal][info.parte] = []
-            grouped[info.canal][info.parte].push(info)
-        }
-    })
-
-    for (const c of Object.keys(grouped)) for (const p of Object.keys(grouped[c])) shuffle(grouped[c][p])
-
-    let parteAtual = 1
-    let copied = false
-
-    while (currentTotal < TARGET_BYTES) {
-        console.log(`🔄 Rodada por parte: ${parteAtual}`)
-        let moved = false
-
-        for (const canal of Object.keys(grouped)) {
-            const list = grouped[canal][parteAtual]
-            if (!list || !list.length) continue
-
-            const take = MAX_PER_ROUND === 0 ? list.length : Math.min(MAX_PER_ROUND, list.length)
-            const pick = list.splice(0, take)
-
-            for (const info of pick) {
-                if (currentTotal >= TARGET_BYTES) break
-                const src = path.join(DOWNLOADS, info.file)
-                if (!fs.existsSync(src)) continue
-
-                const size = fs.statSync(src).size
-                const dest = path.join(SELECTED, info.file)
-                console.log(`   📥 Copiando: ${info.file} (${humanBytes(size)})`)
-                fs.copyFileSync(src, dest)
-
-                manifest.push({ ...info, size, finalName: info.file })
-                currentTotal += size
-                copied = true
-                moved = true
-
-                console.log(`   📊 Acumulado: ${humanBytes(currentTotal)} / ${humanBytes(TARGET_BYTES)}\n`)
-            }
-        }
-
-        if (!moved) {
-            parteAtual++
-            if (!Object.keys(grouped).some((c) => grouped[c][parteAtual]?.length)) break
-        }
-    }
-
-    saveManifest(manifest)
-
-    if (RANDOMIZE) {
-        console.log("🔁 Reordenando lista final...")
-        await reorderAndRename(manifest)
-        saveManifest(manifest)
-    }
-
-    console.log("\n✅ Finalizado!")
-    console.log(`📦 Total no destino: ${humanBytes(currentTotal)}\n`)
-    process.exit(0)
-})()
+  console.log("\n✅ Finalizado.\n");
+})();

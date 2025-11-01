@@ -18,3 +18,25 @@ document.addEventListener("keydown", (e) => {
 });
 
 nextVideo();
+
+
+document.addEventListener("keydown", (e) => {
+  // Detecta CTRL + F
+  if (e.ctrlKey && e.key.toLowerCase() === "f") {
+    e.preventDefault(); // Impede abrir a busca
+    
+    const player = document.getElementById("player");
+    if (!player) return;
+
+    // Entra em fullscreen dependendo do navegador
+    if (player.requestFullscreen) {
+      player.requestFullscreen();
+    } else if (player.webkitRequestFullscreen) { // Safari
+      player.webkitRequestFullscreen();
+    } else if (player.msRequestFullscreen) { // IE / Edge Legacy
+      player.msRequestFullscreen();
+    }
+
+    console.log("🖥️ Entrando em modo Fullscreen (simulando F11)");
+  }
+});
