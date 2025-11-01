@@ -1,13 +1,81 @@
-html, body {
-  margin: 0;
-  padding: 0;
-  background: black;
-  height: 100%;
-  overflow: hidden;
+html,
+body {
+    margin: 0;
+    padding: 0;
+    background: black;
+    height: 100%;
+    overflow: hidden;
 }
+
+#player-container {
+    position: fixed;
+    inset: 0;
+    background: black;
+}
+
+/* O vídeo fica atrás e NÃO captura cliques */
 video {
-  width: 100vw;
-  height: 100vh;
-  object-fit: cover;
-  background: black;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    pointer-events: none; /* 👈 ESSENCIAL para a barra e metades funcionarem */
+}
+
+/* Metades de clique */
+#click-left,
+#click-right {
+    position: absolute;
+    top: 0;
+    width: 50%;
+    height: 100%;
+    z-index: 10;
+    pointer-events: auto; /* recebem clique */
+}
+
+#click-left {
+    left: 0;
+}
+#click-right {
+    right: 0;
+}
+
+video,
+#click-left,
+#click-right,
+#progress {
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+}
+
+/* Barra de progresso */
+#progress {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 65px;
+    background: rgb(78, 78, 78);
+    opacity: 0;
+    transition: none; /* 👈 Sem fade para máximo desempenho */
+    z-index: 20;
+    pointer-events: auto;
+}
+
+#progress.visible {
+    opacity: 1;
+}
+
+/* Preenchimento */
+#progress .fill {
+    height: 100%;
+    width: 0%;
+    background: #5ddf6e;
+    opacity: 0.9;
+    /* Sem transição → atualiza instantâneo */
+}
+
+/* 👇 Cursor auto-hide */
+.hide-cursor {
+    cursor: none !important;
 }

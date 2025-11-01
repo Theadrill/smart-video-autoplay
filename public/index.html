@@ -1,13 +1,28 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
-<head>
-  <meta charset="UTF-8">
-  <title>Smart Local Autoplay</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="styles.css">
-</head>
-<body>
-  <video id="player" autoplay playsinline></video>
-  <script src="main.js"></script>
-</body>
+    <head>
+        <meta charset="UTF-8" />
+        <title>Smart Local Autoplay</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <link rel="stylesheet" href="styles.css" />
+    </head>
+    <body>
+        <div id="player-container">
+            <!-- Metade esquerda (voltar) -->
+            <div id="click-left"></div>
+
+            <!-- Metade direita (avançar) -->
+            <div id="click-right"></div>
+
+            <!-- Player de vídeo -->
+            <video id="player" autoplay muted playsinline></video>
+
+            <!-- Barra de progresso -->
+            <div id="progress">
+                <div class="fill"></div>
+            </div>
+        </div>
+
+        <script src="main.js"></script>
+    </body>
 </html>
