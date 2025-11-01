@@ -1,6 +1,7 @@
 // mergeVideos.js
-// Autor: você 🫶 + GPT
-// Objetivo: unir/dividir vídeos por partes com lógica inteligente, retomada segura e barra de progresso limpa.
+// Autor: você 🫶 + GPT, versão "unir videos pt2"
+// Objetivo: unir/dividir vídeos em partes com lógica inteligente, retomada segura e barra de progresso limpa.
+// Mantido: TODOS OS LOGS, SPINNER, VISUAL E COMENTÁRIOS ORIGINAIS.
 // Requisitos: ffmpeg e ffprobe no PATH.
 
 import fs from "fs"
@@ -87,10 +88,7 @@ function runFfmpegWithProgress(args, totalSeconds, labelFn) {
             const pct = Math.round(frac * 100)
             const spin = spinnerFrames[spinIndex++ % spinnerFrames.length]
 
-            const label =
-                typeof labelFn === "function"
-                    ? labelFn(lastTime) // dinâmico
-                    : labelFn // string fixa
+            const label = typeof labelFn === "function" ? labelFn(lastTime) : labelFn
 
             process.stdout.write("\r" + `${spin} ${label} ${bar} ${pct}%  (${fmtTime(lastTime)} / ${fmtTime(totalSeconds)})  ⏱️ ETA: ${fmtTime(remaining)}  ⚡ ${rate.toFixed(2)}x` + "\x1b[K")
         })
@@ -100,7 +98,6 @@ function runFfmpegWithProgress(args, totalSeconds, labelFn) {
             process.stdout.write("\r\x1b[K")
 
             const finalLabel = typeof labelFn === "function" ? labelFn(totalSeconds) : labelFn
-
             const finalTime = fmtTime(totalSeconds)
 
             if (code === 0) {
@@ -118,61 +115,72 @@ function runFfmpegWithProgress(args, totalSeconds, labelFn) {
 }
 
 // -----------------------
-// FFPROBE + GROUP
+// FFPROBE
 // -----------------------
 function getDurationSeconds(abs) {
     return Number(execSync(`ffprobe -v error -show_entries format=duration -of csv=p=0 "${abs}"`).toString()) || 0
 }
-function getTotalDuration(parts) {
-    return parts.reduce((sum, p) => sum + getDurationSeconds(path.join(originalFolder, p.file)), 0)
-}
 
+// -----------------------
+// AGRUPAMENTO (CORRIGIDO PARA "parte N" SEM HÍFEN)
+// -----------------------
 function groupFiles() {
     const files = fs.readdirSync(originalFolder).filter((f) => f.endsWith(".mp4"))
     const groups = {}
+
     for (const f of files) {
-        const m = f.match(/(.+?)\s+(?:parte|part)\s*([0-9]+)\.mp4$/i)
+        const m = f.match(/(.+?)\s+parte\s+([0-9]+)\.mp4$/i)
         if (!m) continue
-        const base = m[1].trim(),
-            num = Number(m[2])
+        const base = m[1].trim()
+        const num = Number(m[2])
         if (!groups[base]) groups[base] = []
         groups[base].push({ file: f, partNum: num })
     }
+
     for (const k in groups) groups[k].sort((a, b) => a.partNum - b.partNum)
     return groups
 }
+
+// -----------------------
+// CHECAR SE JÁ ESTÁ CONCLUÍDO
+// -----------------------
+function alreadyProcessed(base, finalParts) {
+    const existing = fs.readdirSync(outputFolder).filter((f) => f.startsWith(base + " parte ") && f.endsWith(".mp4"))
+    return existing.length === finalParts
+}
+
+// -----------------------
+// LIMPAR OUTPUT DE UM VÍDEO
+// -----------------------
 function cleanupVideoOutput(base) {
-    for (const f of fs.readdirSync(outputFolder)) if (f.startsWith(base)) fs.unlinkSync(path.join(outputFolder, f))
+    for (const f of fs.readdirSync(outputFolder)) {
+        if (f.startsWith(base + " parte ")) fs.unlinkSync(path.join(outputFolder, f))
+    }
 }
 
 // -----------------------
-// MERGE + SPLIT (AGORA COM NOME DA PARTE)
+// MERGE + SPLIT
 // -----------------------
-async function mergePartsToFile(partsFiles, outputPath, totalDurationSec, labelInfo = "") {
+async function mergeAll(partsList, base) {
     const listFile = path.join(originalFolder, "_list.txt")
+    fs.writeFileSync(listFile, partsList.map((p) => `file '${path.join(originalFolder, p.file).replace(/'/g, `'\\''`)}'`).join("\n"))
 
-    // ✅ Usa aspas simples e ESCAPA apenas apóstrofos no caminho
-    fs.writeFileSync(
-        listFile,
-        partsFiles
-            .map((f) => {
-                const full = path.join(originalFolder, f)
-                // Escapa apóstrofo para o formato do concat demuxer: 'foo'\''bar'
-                const escaped = full.replace(/'/g, `'\\''`)
-                return `file '${escaped}'`
-            })
-            .join("\n")
-    )
+    const total = partsList.reduce((sum, p) => sum + getDurationSeconds(path.join(originalFolder, p.file)), 0)
 
-    await runFfmpegWithProgress(["-y", "-hide_banner", "-f", "concat", "-safe", "0", "-i", listFile, "-c", "copy", outputPath], totalDurationSec, `⏳ MERGE ${labelInfo}`)
+    const temp = path.join(outputFolder, `${base} - TEMP_MERGED.mp4`)
+
+    await runFfmpegWithProgress(["-y", "-hide_banner", "-f", "concat", "-safe", "0", "-i", listFile, "-c", "copy", temp], total, `⏳ MERGE (total)`)
+
     fs.unlinkSync(listFile)
+    return temp
 }
 
-async function splitFileToNParts(inputPath, parts, baseName) {
+async function splitFile(inputPath, parts, base) {
     const total = getDurationSeconds(inputPath)
     const seg = total / parts
+
     for (let i = 0; i < parts; i++) {
-        const out = path.join(outputFolder, `${baseName} - finalPart${i + 1}.mp4`)
+        const out = path.join(outputFolder, `${base} parte ${i + 1}.mp4`)
         await runFfmpegWithProgress(["-y", "-hide_banner", "-ss", String(i * seg), "-t", String(seg), "-i", inputPath, "-c", "copy", out], seg, `⏳ SPLIT (${i + 1}/${parts})`)
     }
 }
@@ -181,7 +189,7 @@ async function splitFileToNParts(inputPath, parts, baseName) {
 // MAIN
 // -----------------------
 console.log("====================================")
-console.log("🎬 MERGE/SPLIT COM RETOMADA + PROGRESSO")
+console.log("🎬 MERGE/SPLIT COM RETOMADA + PROGRESSO (unir videos pt2)")
 console.log(`📂 Origem: ${originalFolder}`)
 console.log(`📦 Saída:  ${outputFolder}`)
 console.log("====================================")
@@ -189,6 +197,7 @@ console.log("====================================")
 const groups = groupFiles()
 let names = Object.keys(groups)
 
+// Retomada
 if (progress.lastVideo && progress.status !== "completed") {
     names = [progress.lastVideo, ...names.filter((n) => n !== progress.lastVideo)]
 }
@@ -213,56 +222,35 @@ for (let index = 0; index < names.length; index++) {
     progress.status = "incomplete"
     saveProgress()
 
-    let finalParts
-    const durationSec = getTotalDuration(partsList)
-    const durationMin = durationSec / 60
+    // determina finalParts
+    const totalDuration = partsList.reduce((sum, p) => sum + getDurationSeconds(path.join(originalFolder, p.file)), 0)
+    const durationMin = totalDuration / 60
 
+    let finalParts
     if (defaultFinal === 0) {
-        if (durationMin >= minutesMoreThan) {
-            finalParts = bigVideoParts
-            console.log(`⏱️ GRANDE (${durationMin.toFixed(1)} min) → finalParts = ${finalParts}`)
-        } else if (durationMin < minutesLessThan) {
-            finalParts = partsIfLess
-            console.log(`⏱️ CURTO (${durationMin.toFixed(1)} min) → finalParts = ${finalParts}`)
-        } else {
-            finalParts = partsIfMore
-            console.log(`⏱️ MÉDIO (${durationMin.toFixed(1)} min) → finalParts = ${finalParts}`)
-        }
+        if (durationMin >= minutesMoreThan) finalParts = bigVideoParts
+        else if (durationMin < minutesLessThan) finalParts = partsIfLess
+        else finalParts = partsIfMore
     } else {
         finalParts = defaultFinal
-        console.log(`⚙️ finalParts fixo = ${finalParts}`)
+    }
+
+    console.log(`🎯 finalParts = ${finalParts}`)
+
+    // ✅ PULAR SE JÁ EXISTE
+    if (alreadyProcessed(base, finalParts)) {
+        console.log("✅ Já pronto anteriormente → pulando.")
+        progress.status = "completed"
+        saveProgress()
+        continue
     }
 
     try {
         cleanupVideoOutput(base)
 
-        if (finalParts === currentParts) {
-            partsList.forEach((p, i) => fs.copyFileSync(path.join(originalFolder, p.file), path.join(outputFolder, `${base} - finalPart${i + 1}.mp4`)))
-        } else if (finalParts === 1) {
-            await mergePartsToFile(
-                partsList.map((p) => p.file),
-                path.join(outputFolder, `${base}.mp4`),
-                durationSec,
-                "(única parte)"
-            )
-        } else if (currentParts % finalParts === 0) {
-            const g = currentParts / finalParts
-            for (let i = 0; i < finalParts; i++) {
-                const slice = partsList.slice(i * g, (i + 1) * g).map((p) => p.file)
-                const dur = getTotalDuration(partsList.slice(i * g, (i + 1) * g))
-                await mergePartsToFile(slice, path.join(outputFolder, `${base} - finalPart${i + 1}.mp4`), dur, `(parte ${i + 1} de ${finalParts})`)
-            }
-        } else {
-            const temp = path.join(outputFolder, `${base} - TEMP_MERGED.mp4`)
-            await mergePartsToFile(
-                partsList.map((p) => p.file),
-                temp,
-                durationSec,
-                "(merge total)"
-            )
-            await splitFileToNParts(temp, finalParts, base)
-            fs.unlinkSync(temp)
-        }
+        const temp = await mergeAll(partsList, base)
+        await splitFile(temp, finalParts, base)
+        fs.unlinkSync(temp)
 
         progress.status = "completed"
         saveProgress()

@@ -9,7 +9,7 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
 // prettier-ignore
-let URLS = []
+let URLS = [];
 let INCLUDE_KEYWORDS = []
 let EXCLUDE_KEYWORDS = []
 let MIN_DURATION = 180
@@ -23,47 +23,78 @@ if (!fs.existsSync(configPath)) {
     console.error("❌ config.json não encontrado!")
     process.exit(1)
 }
-
 const config = JSON.parse(fs.readFileSync(configPath, "utf8"))
+
+const MAX_CONCURRENT_DOWNLOADS = config.maxConcurrentDownloads || 3
+const MAX_CONCURRENT_CONVERSIONS = config.maxConcurrentConversions || 2
+
 if (Array.isArray(config.urls)) URLS = config.urls
 if (Array.isArray(config.includeKeywords)) INCLUDE_KEYWORDS = config.includeKeywords
 if (Array.isArray(config.excludeKeywords)) EXCLUDE_KEYWORDS = config.excludeKeywords
 if (config.minDurationSeconds) MIN_DURATION = config.minDurationSeconds
 if (typeof config.ignoreShorts === "boolean") IGNORE_SHORTS = config.ignoreShorts
 
-const downloadsPath = path.resolve(config.downloadsPath)
+function resolveDownloadsPath(raw) {
+    if (Array.isArray(raw) && raw.length > 0) {
+        for (const p of raw) {
+            const abs = path.resolve(p)
+            if (fs.existsSync(abs)) return abs
+        }
+        const first = path.resolve(raw[0])
+        fs.mkdirSync(first, { recursive: true })
+        return first
+    }
+    return path.resolve(raw)
+}
+
+const downloadsPath = resolveDownloadsPath(config.downloadsPath)
 if (!fs.existsSync(downloadsPath)) fs.mkdirSync(downloadsPath, { recursive: true })
+
+// ==========================================================
+// 🧠 PROGRESSO DE RETOMADA
+// ==========================================================
+const progressFile = path.join(downloadsPath, "downloads-progress.json")
+
+let progress = { lastVideo: null, status: "completed" }
+try {
+    if (fs.existsSync(progressFile)) progress = JSON.parse(fs.readFileSync(progressFile, "utf8"))
+} catch {}
+
+function saveProgress() {
+    fs.writeFileSync(progressFile, JSON.stringify(progress, null, 2))
+}
+
+// Se último vídeo estava incompleto → limpar seus arquivos
+if (progress.status === "incomplete" && progress.lastVideo) {
+    console.log(`⚠️ Última execução foi interrompida durante: ${progress.lastVideo}`)
+    console.log("🧹 Limpando arquivos incompletos...")
+
+    for (const f of fs.readdirSync(downloadsPath)) {
+        if (f.includes(progress.lastVideo)) {
+            fs.unlinkSync(path.join(downloadsPath, f))
+            console.log(`  ❌ Removido: ${f}`)
+        }
+    }
+
+    progress.status = "completed"
+    saveProgress()
+    console.log("🔁 Ele será reprocessado do zero quando chegar na fila.\n")
+}
+
+// ==========================================================
+// Regras de divisão
+// ==========================================================
+const DEFAULT_FINAL = Number(config.defaultFinalVideoParts ?? 0)
+const MINUTES_LESS_THAN = Number(config.minutesLessThan ?? 12)
+const PARTS_IF_LESS = Number(config.partsIfLess ?? 2)
+const PARTS_IF_MORE = Number(config.partsIfMore ?? 3)
+const MINUTES_MORE_THAN = Number(config.minutesMoreThan ?? 35)
+const BIG_VIDEO_PARTS = Number(config.bigVideoParts ?? 4)
 
 const CACHE_FILE = path.join(downloadsPath, "videos_cache.json")
 
 // ==========================================================
-// 🧹 Organização e limpeza de logs
-// ==========================================================
-const logsDir = path.resolve("logs")
-if (!fs.existsSync(logsDir)) fs.mkdirSync(logsDir, { recursive: true })
-
-const ERROR_LOG = path.join(logsDir, "error.log")
-const DOWNLOAD_LOG = path.join(logsDir, "download.log")
-const CONVERSION_LOG = path.join(logsDir, "conversion.log")
-
-for (const logFile of [ERROR_LOG, DOWNLOAD_LOG, CONVERSION_LOG]) {
-    try {
-        if (fs.existsSync(logFile)) fs.unlinkSync(logFile)
-        fs.writeFileSync(logFile, "")
-    } catch (err) {
-        console.warn(`⚠️ Não foi possível limpar o log: ${logFile}`, err.message)
-    }
-}
-console.log("🧹 Logs antigos limpos e pasta 'logs' organizada.\n")
-
-// ==========================================================
-// ⚙️ Configurações
-// ==========================================================
-const MAX_CONCURRENT_DOWNLOADS = config.maxConcurrentDownloads || 3
-const MAX_CONCURRENT_CONVERSIONS = config.maxConcurrentConversions || 2
-
-// ==========================================================
-// 🧠 Funções auxiliares
+// Utils
 // ==========================================================
 function sanitizeFilename(name) {
     return name
@@ -72,154 +103,180 @@ function sanitizeFilename(name) {
         .trim()
 }
 
-function saveCache(cache) {
-    fs.writeFileSync(CACHE_FILE, JSON.stringify(cache, null, 2))
-    console.log(`💾 Cache salvo em: ${CACHE_FILE}\n`)
+function fmtTime(sec) {
+    sec = Math.max(0, sec || 0)
+    const h = Math.floor(sec / 3600)
+    const m = Math.floor((sec % 3600) / 60)
+    const s = Math.floor(sec % 60)
+    const pad = (n) => String(n).padStart(2, "0")
+    return h > 0 ? `${pad(h)}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`
 }
 
-function loadCache() {
-    if (!fs.existsSync(CACHE_FILE)) return null
+// Duração síncrona (para limpeza)
+function getDurationSync(filePath) {
     try {
-        return JSON.parse(fs.readFileSync(CACHE_FILE, "utf8"))
+        return Number(execSync(`ffprobe -v error -show_entries format=duration -of csv=p=0 "${filePath}"`).toString())
     } catch {
-        return null
+        return 0
     }
 }
 
-function logTo(file, text) {
-    fs.appendFileSync(file, `[${new Date().toISOString()}] ${text}\n`)
+// ==========================================================
+// 🧹 Limpeza GLOBAL de pendências antes de iniciar
+// ==========================================================
+
+// Extrai “base” do arquivo (antes de .orig.mp4 / .mp4 / “ parte X.mp4” etc.)
+function getBaseFromFilename(f) {
+    const partMatch = f.match(/(.+?)\s+parte\s+\d+\.mp4$/i)
+    if (partMatch) return partMatch[1]
+    return f
+        .replace(/\.orig\.mp4\.part.*$/i, "")
+        .replace(/\.orig\.mp4\.ytdl$/i, "")
+        .replace(/\.orig\.mp4\.temp$/i, "")
+        .replace(/\.orig\.mp4$/i, "")
+        .replace(/\.mp4\.part.*$/i, "")
+        .replace(/\.mp4$/i, "")
+        .trim()
+}
+
+function cleanupIncompleteVideos() {
+    console.log("\n🧹 Verificando arquivos incompletos...")
+
+    const files = fs.readdirSync(downloadsPath)
+    const groups = {}
+
+    for (const f of files) {
+        if (!f.toLowerCase().endsWith(".mp4") && !f.toLowerCase().includes(".mp4.part") && !f.toLowerCase().includes(".orig.mp4") && !/parte\s+\d+\.mp4$/i.test(f) && !f.toLowerCase().endsWith(".ytdl") && !f.toLowerCase().endsWith(".temp")) {
+            continue
+        }
+        const base = getBaseFromFilename(f)
+        if (!groups[base]) groups[base] = []
+        groups[base].push(f)
+    }
+
+    for (const base in groups) {
+        const group = groups[base]
+
+        const hasOrigPart = group.some((f) => f.toLowerCase().includes(".orig.mp4.part"))
+        const hasYtdl = group.some((f) => f.toLowerCase().endsWith(".ytdl"))
+        const hasTemp = group.some((f) => f.toLowerCase().endsWith(".temp"))
+        const hasOrig = group.some((f) => f.toLowerCase().endsWith(".orig.mp4"))
+        const hasFinalWhole = group.some((f) => f.toLowerCase().endsWith(".mp4") && !/parte\s+\d+\.mp4$/i.test(f) && !f.toLowerCase().endsWith(".orig.mp4"))
+        const hasParts = group.some((f) => /parte\s+\d+\.mp4$/i.test(f))
+        const hasFinalPartFragments = group.some((f) => f.toLowerCase().includes(".mp4.part"))
+
+        // 1) Download interrompido (part/ytdl/temp) → apaga tudo
+        if (hasOrigPart || hasYtdl || hasTemp) {
+            console.log(`🗑️ Removendo download parcial → ${base}`)
+            for (const f of group) fs.unlinkSync(path.join(downloadsPath, f))
+            continue
+        }
+
+        // 2) Orig completo sem conversão → OK (vai converter depois)
+        if (hasOrig && !hasFinalWhole && !hasParts) {
+            console.log(`🔁 Encontrado .orig pronto pra converter → ${base}`)
+            continue
+        }
+
+        // 3) Conversão final interrompida (mp4.part) → apaga e refaz
+        if (hasFinalPartFragments) {
+            console.log(`🗑️ Conversão parcial detectada (mp4.part) → ${base}`)
+            for (const f of group) fs.unlinkSync(path.join(downloadsPath, f))
+            continue
+        }
+
+        // 4) Final existe mas o esperado era split em N partes → apaga e refaz
+        if (hasFinalWhole && !hasParts) {
+            const finalFile = group.find((f) => f.toLowerCase().endsWith(".mp4") && !/parte\s+\d+\.mp4$/i.test(f) && !f.toLowerCase().endsWith(".orig.mp4"))
+            if (finalFile) {
+                const duration = getDurationSync(path.join(downloadsPath, finalFile))
+                const expected = decideFinalParts(duration)
+                if (expected > 1) {
+                    console.log(`🗑️ Final único detectado mas eram esperadas ${expected} partes → ${base}`)
+                    for (const f of group) fs.unlinkSync(path.join(downloadsPath, f))
+                    continue
+                }
+            }
+        }
+    }
+
+    console.log("✅ Limpeza concluída.\n")
+}
+
+cleanupIncompleteVideos()
+
+// ==========================================================
+// HUD (fixo no topo, com 2 linhas de respiro antes)
+// ==========================================================
+const HUD_OFFSET = 2 // <<<< Aqui você define quantas linhas quer antes da HUD
+let hudInitialized = false
+
+function initDisplay() {
+    if (hudInitialized) return
+    hudInitialized = true
+
+    // Linhas vazias antes da HUD (para evitar colar no topo)
+    for (let i = 0; i < HUD_OFFSET; i++) console.log("")
+
+    // Reserva as linhas para os slots
+    for (let i = 0; i < MAX_CONCURRENT_CONVERSIONS; i++) console.log("")
+}
+
+// Agora a função writeAt considera o offset
+function writeAt(slot, text) {
+    if (!hudInitialized) initDisplay()
+    process.stdout.write("\x1b7") // save cursor
+    readline.cursorTo(process.stdout, 0, slot + HUD_OFFSET) // aplica offset
+    readline.clearLine(process.stdout, 0)
+    process.stdout.write(text)
+    process.stdout.write("\x1b8") // restore cursor
 }
 
 // ==========================================================
-// 🌐 Captura nome do canal via HTML
+// Barra de progresso
 // ==========================================================
-async function getChannelName(url) {
-    return new Promise((resolve) => {
-        let normalizedUrl = url.replace("/@", "/")
-        if (!normalizedUrl.endsWith("/")) normalizedUrl += "/"
+function runFfmpegWithProgress(args, totalSeconds, labelFn, slot = 0) {
+    return new Promise((resolve, reject) => {
+        const spinnerFrames = ["⠁", "⠂", "⠄", "⡀", "⢀", "⠠", "⠐", "⠈"]
+        let spinIndex = 0
+        let lastTime = 0
+        const startWall = Date.now()
 
-        console.log("🌐 Capturando nome do canal diretamente do HTML...")
-        console.log(`🌐 Tentando obter HTML de: ${normalizedUrl}`)
+        const proc = spawn("ffmpeg", args, { stdio: ["ignore", "ignore", "pipe"] })
 
-        https
-            .get(normalizedUrl, { timeout: 10000 }, (res) => {
-                if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) return resolve(getChannelName(res.headers.location))
+        proc.stderr.on("data", (chunk) => {
+            const s = chunk.toString()
+            const match = s.match(/time=(\d{2}):(\d{2}):(\d{2})/)
+            if (!match) return
 
-                let data = ""
-                res.on("data", (chunk) => (data += chunk))
-                res.on("end", () => {
-                    const match = data.match(/<title>(.*?)<\/title>/i)
-                    if (match && match[1]) {
-                        const title = match[1].replace("- YouTube", "").trim()
-                        console.log(`📺 Canal detectado: ${title}`)
-                        return resolve(title)
-                    }
-                    console.log("⚠️ Não foi possível capturar o nome do canal pelo HTML.")
-                    resolve(null)
-                })
-            })
-            .on("error", (err) => {
-                console.log(`⚠️ Erro ao capturar HTML: ${err.message}`)
-                resolve(null)
-            })
+            const hh = +match[1],
+                mm = +match[2],
+                ss = +match[3]
+            lastTime = hh * 3600 + mm * 60 + ss
+            const frac = Math.min(1, lastTime / totalSeconds)
+            const elapsed = (Date.now() - startWall) / 1000
+            const rate = lastTime > 0 ? lastTime / elapsed : 1
+            const rem = (totalSeconds - lastTime) / Math.max(rate, 0.01)
+
+            const bar = `[${"■".repeat(Math.round(frac * 20))}${"□".repeat(20 - Math.round(frac * 20))}]`
+            const pct = Math.round(frac * 100)
+            const spin = spinnerFrames[spinIndex++ % spinnerFrames.length]
+            const label = typeof labelFn === "function" ? labelFn(lastTime) : labelFn
+
+            writeAt(slot, `${spin} ${label} ${bar} ${pct}% (${fmtTime(lastTime)} / ${fmtTime(totalSeconds)}) ETA: ${fmtTime(rem)} ⚡ ${rate.toFixed(2)}x`)
+        })
+
+        proc.on("close", (code) => {
+            // limpa o slot
+            writeAt(slot, "")
+            if (code === 0) resolve()
+            else reject()
+        })
     })
 }
 
 // ==========================================================
-// 🎬 Coleta e filtro
-// ==========================================================
-async function collectFilteredVideos() {
-    const cache = {}
-
-    for (const url of URLS) {
-        const type = url.includes("/playlist?list=") ? "playlist" : url.includes("/watch?v=") ? "video" : "channel"
-
-        console.log(`\n============================================================`)
-        console.log(`🔍 Coletando vídeos de: ${url}`)
-        console.log(`📺 Tipo detectado: ${type}`)
-        console.log(`============================================================\n`)
-
-        let channelName = "Canal desconhecido"
-        if (type === "channel") {
-            try {
-                const name = await getChannelName(url)
-                if (name) {
-                    channelName = sanitizeFilename(name)
-                    console.log(`🧠 Nome do canal confirmado: ${channelName}`)
-                }
-            } catch (err) {
-                console.warn("⚠️ Erro ao capturar nome do canal:", err.message)
-            }
-        }
-
-        const tmpFile = path.join(downloadsPath, "tmp_list.json")
-        try {
-            execSync(`yt-dlp -j --flat-playlist "${url}" > "${tmpFile}"`, { stdio: "inherit" })
-        } catch {
-            console.error(`⚠️ Falha ao coletar vídeos de ${url}`)
-            continue
-        }
-
-        const lines = fs.readFileSync(tmpFile, "utf8").split("\n").filter(Boolean)
-        fs.unlinkSync(tmpFile)
-        const entries = lines.map((line) => JSON.parse(line))
-
-        const inc = INCLUDE_KEYWORDS.map((k) => k.toLowerCase())
-        const exc = EXCLUDE_KEYWORDS.map((k) => k.toLowerCase())
-
-        const filtered = entries.filter((v) => {
-            const t = v.title?.toLowerCase() || ""
-            const includeOK = inc.length === 0 || inc.some((kw) => t.includes(kw))
-            const excludeOK = exc.length === 0 || !exc.some((kw) => t.includes(kw))
-            const isShort = IGNORE_SHORTS && (t.includes("#shorts") || t.includes("shorts") || (v.duration && v.duration < 60))
-            return includeOK && excludeOK && !isShort
-        })
-
-        console.log(`🎬 ${entries.length} vídeos totais.`)
-        console.log(INCLUDE_KEYWORDS.length > 0 || EXCLUDE_KEYWORDS.length > 0 ? `🔎 ${filtered.length} correspondem ao filtro de inclusão/exclusão.\n` : "📥 Nenhum filtro definido — todos os vídeos serão baixados.\n")
-
-        cache[url] = filtered.map((v) => ({
-            id: v.id,
-            title: v.title,
-            uploader: channelName || v.uploader || "Canal desconhecido",
-        }))
-    }
-
-    saveCache(cache)
-    return cache
-}
-
-// ==========================================================
-// 🧩 Revalidação do cache existente
-// ==========================================================
-function revalidateCache(cache) {
-    const newCache = {}
-    let totalOriginal = 0
-    let totalNovo = 0
-
-    const inc = INCLUDE_KEYWORDS.map((k) => k.toLowerCase())
-    const exc = EXCLUDE_KEYWORDS.map((k) => k.toLowerCase())
-
-    for (const [url, videos] of Object.entries(cache)) {
-        totalOriginal += videos.length
-        newCache[url] = videos.filter((v) => {
-            const t = v.title?.toLowerCase() || ""
-            const includeOK = inc.length === 0 || inc.some((kw) => t.includes(kw))
-            const excludeOK = exc.length === 0 || !exc.some((kw) => t.includes(kw))
-            const isShort = IGNORE_SHORTS && (t.includes("#shorts") || t.includes("shorts"))
-            return includeOK && excludeOK && !isShort
-        })
-        totalNovo += newCache[url].length
-    }
-
-    const removidos = totalOriginal - totalNovo
-    console.log(`🧹 Revalidação do cache: ${totalOriginal} → ${totalNovo} vídeos (removidos ${removidos}).\n`)
-    saveCache(newCache)
-    return newCache
-}
-
-// ==========================================================
-// ⚙️ Download + conversão com progresso
+// ffprobe duração (assíncrono – usado no pipeline)
 // ==========================================================
 async function getDuration(filePath) {
     return new Promise((resolve) => {
@@ -230,111 +287,96 @@ async function getDuration(filePath) {
     })
 }
 
+// ==========================================================
+// Download
+// ==========================================================
 async function downloadVideo(video) {
     const videoId = video.id
-    const title = sanitizeFilename(video.title || "Sem título")
-    const channel = sanitizeFilename(video.uploader || "Canal desconhecido")
+    const title = sanitizeFilename(video.title)
+    const channel = sanitizeFilename(video.uploader)
     const baseName = `${channel} - ${title} - ${videoId}`
     const tempFile = path.join(downloadsPath, `${baseName}.orig.mp4`)
 
+    // marcar progresso
+    progress.lastVideo = baseName
+    progress.status = "incomplete"
+    saveProgress()
+
     console.log(`⬇️  Iniciando download: ${title}`)
-    logTo(DOWNLOAD_LOG, `Baixando: ${title}`)
 
     return new Promise((resolve) => {
-        const proc = spawn("yt-dlp", [`https://www.youtube.com/watch?v=${videoId}`, "-f", "b[ext=mp4]", "-o", tempFile, "--newline", "--no-overwrites"])
-
-        proc.stdout.on("data", (data) => {
-            const line = data.toString().trim()
-            if (line.startsWith("[download]")) {
-                readline.clearLine(process.stdout, 0)
-                readline.cursorTo(process.stdout, 0)
-                process.stdout.write(`📥 ${title} — ${line.replace("[download]", "").trim()}`)
-            }
-        })
+        const proc = spawn("yt-dlp", [`https://www.youtube.com/watch?v=${videoId}`, "-f", "b[ext=mp4]", "-o", tempFile, "--no-overwrites"])
 
         proc.on("close", async (code) => {
-            readline.clearLine(process.stdout, 0)
-            readline.cursorTo(process.stdout, 0)
-
-            if (code !== 0) {
-                console.log(`❌ Erro ao baixar: ${title}`)
-                logTo(ERROR_LOG, `Erro ao baixar ${title}`)
-                return resolve(null)
-            }
-
+            if (code !== 0) return resolve(null)
             const duration = await getDuration(tempFile)
             if (duration < MIN_DURATION) {
-                console.log(`⏩ Ignorando ${title} (apenas ${Math.round(duration)}s)`)
                 fs.unlinkSync(tempFile)
                 return resolve(null)
             }
-
             console.log(`✅ Download concluído: ${title}`)
-            logTo(DOWNLOAD_LOG, `✅ Concluído: ${title}`)
-            resolve({ tempFile, baseName })
-        })
-    })
-}
-
-async function convertVideo({ tempFile, baseName }) {
-    return new Promise((resolve) => {
-        const finalFile = path.join(downloadsPath, `${baseName}.mp4`)
-        const partPattern = path.join(downloadsPath, `${baseName}_part_%03d.mp4`)
-
-        console.log(`🎞️  Convertendo: ${baseName}`)
-
-        const ffmpeg = spawn("ffmpeg", ["-y", "-i", tempFile, "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "30", "-vf", "scale='min(1280,iw)':-2", "-movflags", "+faststart", finalFile])
-
-        ffmpeg.stderr.on("data", (data) => {
-            const msg = data.toString()
-            const match = msg.match(/time=(\d+:\d+:\d+)/)
-            if (match) {
-                readline.clearLine(process.stdout, 0)
-                readline.cursorTo(process.stdout, 0)
-                process.stdout.write(`⚙️  Convertendo ${baseName} — tempo ${match[1]}`)
-            }
-        })
-
-        ffmpeg.on("close", (code) => {
-            readline.clearLine(process.stdout, 0)
-            readline.cursorTo(process.stdout, 0)
-            if (code !== 0) {
-                console.log(`❌ Erro ao converter ${baseName}`)
-                logTo(ERROR_LOG, `Erro ao converter ${baseName}`)
-                return resolve(false)
-            }
-
-            console.log(`🧩 Dividindo vídeo: ${baseName}`)
-            const splitter = spawn("ffmpeg", ["-y", "-i", finalFile, "-c", "copy", "-f", "segment", "-segment_time", "300", "-reset_timestamps", "1", partPattern])
-
-            splitter.on("close", () => {
-                fs.unlinkSync(tempFile)
-                fs.unlinkSync(finalFile)
-                console.log(`✅ Finalizado e dividido: ${baseName}`)
-                logTo(CONVERSION_LOG, `✅ Convertido e dividido: ${baseName}`)
-                resolve(true)
-            })
+            resolve({ tempFile, baseName, duration })
         })
     })
 }
 
 // ==========================================================
-// 🚀 Execução principal
+// Regras de divisão
 // ==========================================================
-;(async () => {
-    console.log("🚀 Iniciando script de coleta e download...\n")
+function decideFinalParts(totalSeconds) {
+    if (DEFAULT_FINAL > 0) return DEFAULT_FINAL
+    const minutes = totalSeconds / 60
+    if (minutes >= MINUTES_MORE_THAN) return BIG_VIDEO_PARTS
+    if (minutes < MINUTES_LESS_THAN) return PARTS_IF_LESS
+    return PARTS_IF_MORE
+}
 
-    let cache = loadCache()
-    if (!cache) {
-        console.log("🧠 Nenhum cache encontrado — gerando novo cache...\n")
-        cache = await collectFilteredVideos()
-    } else {
-        console.log("⚡ Cache existente detectado — revalidando filtros...\n")
-        cache = revalidateCache(cache)
+// ==========================================================
+// Convert + Split
+// ==========================================================
+async function convertAndSplit(task) {
+    const { tempFile, baseName, duration, slot } = task
+    const finalFile = path.join(downloadsPath, `${baseName}.mp4`)
+
+    await runFfmpegWithProgress(["-y", "-i", tempFile, "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "30", "-vf", "scale='min(1280,iw)':-2", "-movflags", "+faststart", finalFile], duration, () => `🎞️ Convertendo ${baseName}`, slot)
+
+    const finalParts = decideFinalParts(duration)
+
+    if (finalParts <= 1) {
+        if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile)
+        progress.status = "completed"
+        saveProgress()
+        return true
     }
 
+    const segment = duration / finalParts
+
+    for (let i = 0; i < finalParts; i++) {
+        const start = Math.floor(i * segment)
+        const dur = i === finalParts - 1 ? Math.ceil(duration - start) : Math.ceil(segment)
+        const out = path.join(downloadsPath, `${baseName} parte ${i + 1}.mp4`)
+
+        await runFfmpegWithProgress(["-y", "-ss", String(start), "-t", String(dur), "-i", finalFile, "-c", "copy", out], dur, () => `✂️ Parte ${i + 1}/${finalParts} — ${baseName}`, slot)
+    }
+
+    if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile)
+    if (fs.existsSync(finalFile)) fs.unlinkSync(finalFile)
+
+    progress.status = "completed"
+    saveProgress()
+    return true
+}
+
+// ==========================================================
+// Execução principal
+// ==========================================================
+;(async () => {
+    initDisplay() // reserva as linhas da HUD desde o início
+
+    const cache = JSON.parse(fs.readFileSync(CACHE_FILE, "utf8"))
     const allVideos = Object.values(cache).flat()
-    console.log(`📦 Total de vídeos a baixar: ${allVideos.length}\n`)
+
+    console.log(`📦 Total de vídeos na fila: ${allVideos.length}\n`)
 
     const downloadQueue = [...allVideos]
     const conversionQueue = []
@@ -342,33 +384,30 @@ async function convertVideo({ tempFile, baseName }) {
 
     async function downloadWorker() {
         while (downloadQueue.length > 0) {
-            const video = downloadQueue.shift()
-            const result = await downloadVideo(video)
-            if (result) conversionQueue.push(result)
+            const v = downloadQueue.shift()
+            const r = await downloadVideo(v)
+            if (r) conversionQueue.push(r)
         }
     }
 
-    async function conversionWorker() {
+    async function conversionWorker(slot) {
         while (true) {
             const task = conversionQueue.shift()
             if (!task) {
-                await new Promise((r) => setTimeout(r, 1000))
+                await new Promise((r) => setTimeout(r, 800))
                 if (downloadQueue.length === 0 && conversionQueue.length === 0) break
                 continue
             }
-            const ok = await convertVideo(task)
+            task.slot = slot
+            const ok = await convertAndSplit(task)
             if (ok) concluidos++
         }
     }
 
     const downloaders = Array.from({ length: MAX_CONCURRENT_DOWNLOADS }, downloadWorker)
-    const converters = Array.from({ length: MAX_CONCURRENT_CONVERSIONS }, conversionWorker)
+    const converters = Array.from({ length: MAX_CONCURRENT_CONVERSIONS }, (_, i) => conversionWorker(i))
 
     await Promise.all([...downloaders, ...converters])
 
-    console.log("\n============================================================")
-    console.log(`📊 Total de vídeos processados: ${allVideos.length}`)
-    console.log(`✅ Concluídos com sucesso: ${concluidos}`)
-    console.log("🎉 Execução finalizada!")
-    console.log("============================================================\n")
+    console.log(`\n✅ Concluídos: ${concluidos}`)
 })()
