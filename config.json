@@ -1,9 +1,5 @@
 {
-    "downloadsPath": [
-  "D:\\VIDEOS PARA TELÃO\\downloads",
-  "E:\\VIDEOS PARA TELÃO\\downloads",
-  "F:\\VIDEOS PARA TELÃO\\downloads"
-],
+    "downloadsPath": ["D:\\VIDEOS PARA TELÃO\\downloads", "E:\\VIDEOS PARA TELÃO\\downloads", "F:\\VIDEOS PARA TELÃO\\downloads"],
     "selectedPath": "D:\\VIDEOS",
     "targetGB": 6.8,
     "generateRandomNames": true,
@@ -14,5 +10,12 @@
     "includeKeywords": ["Best of", "Highlights", "Top moments", "Series", "Top 3"],
     "excludeKeywords": ["Trailer", "Preview", "Podcast", "Invite", "PÊNALTIS"],
     "minDurationSeconds": 182,
-    "ignoreShorts": true
+    "ignoreShorts": true,
+    "originalFolderForMergeSplit": "F:\\VIDEOS PARA TELÃO\\downloads",
+    "defaultFinalVideoParts": 0,
+    "minutesLessThan": 12,
+    "partsIfLess": 2,
+    "partsIfMore": 3,
+    "minutesMoreThan": 35,
+    "bigVideoParts": 4
 }
