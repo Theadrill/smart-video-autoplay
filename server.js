@@ -251,25 +251,38 @@ app.listen(PORT, () => console.log(`\n✅ Servidor rodando: http://localhost:${P
 // ==========================================================
 const deleteVideoHandler = (req, res) => {
   try {
-    let file = (req.body && req.body.file) || (req.query && req.query.file)
-    if (!file) return res.status(400).json({ ok: false, error: "file ausente" })
-    try { file = decodeURIComponent(file) } catch {}    if (typeof file === "string") file = file.trim()
-    const located = findFileInDownloads(file)
-    if (!located) {
-      console.log(`⚠️ deleteVideo: arquivo não encontrado: ${file}`)
-      return res.status(404).json({ ok: false, error: "arquivo não encontrado" })
+    let file = (req.body && req.body.file) || (req.query && req.query.file);
+    if (!file) {
+      console.log("❌ deleteVideo: file ausente na requisição");
+      return res.status(400).json({ ok: false, error: "file ausente" });
     }
-    fs.unlinkSync(located)
-    console.log(`🗑️ deleteVideo: deletado ${file}`)
-    roundState.playedVideos.delete(file)
-    saveRoundState()
-    database = syncDatabase()
-    return res.json({ ok: true })
+    try { file = decodeURIComponent(file) } catch {}
+    if (typeof file === "string") file = file.trim();
+
+    const located = findFileInDownloads(file);
+
+    if (!located) {
+      console.log(`❌ deleteVideo: arquivo não encontrado: ${file}`);
+      return res.status(404).json({ ok: false, file, error: "arquivo não encontrado" });
+    }
+
+    try {
+      fs.unlinkSync(located);
+      console.log(`🗑️  deleteVideo: DELETADO => ${file}`);
+      roundState.playedVideos.delete(file);
+      saveRoundState();
+      database = syncDatabase();
+      return res.json({ ok: true, file, deletedPath: located });
+    } catch (e) {
+      console.error(`⚠️  deleteVideo: falha ao deletar ${file}:`, e?.message || e);
+      return res.status(500).json({ ok: false, file, error: "falha ao deletar arquivo" });
+    }
   } catch (e) {
-    console.error("Erro ao deletar vídeo:", e?.message || e)
-    return res.status(500).json({ ok: false, error: "erro interno" })
+    console.error("Erro ao deletar vídeo:", e?.message || e);
+    return res.status(500).json({ ok: false, error: "erro interno" });
   }
 }
 app.post("/api/deleteVideo", deleteVideoHandler);
 app.get("/api/deleteVideo", deleteVideoHandler);
+
 

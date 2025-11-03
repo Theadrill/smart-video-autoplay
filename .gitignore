@@ -2,6 +2,7 @@
 /downloads
 roundState.json
 played.json
+database.json
 # Logs
 logs
 *.log
