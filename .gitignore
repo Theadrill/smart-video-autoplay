@@ -1,6 +1,7 @@
 *.mp4
 /downloads
 roundState.json
+played.json
 # Logs
 logs
 *.log
