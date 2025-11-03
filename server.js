@@ -6,6 +6,8 @@ import { execSync } from "child_process"
 
 const app = express()
 app.use(cors())
+app.use(express.json())
+app.use(express.urlencoded({ extended: true }))
 app.use(express.static("public"))
 
 // Carrega config
@@ -243,3 +245,31 @@ app.get("/video/:name", (req, res) => {
 // ==========================================================
 const PORT = process.env.PORT || 3000
 app.listen(PORT, () => console.log(`\n✅ Servidor rodando: http://localhost:${PORT}\n`))
+
+// ==========================================================
+// 🔥 API - Deletar vídeo (blacklist)
+// ==========================================================
+const deleteVideoHandler = (req, res) => {
+  try {
+    let file = (req.body && req.body.file) || (req.query && req.query.file)
+    if (!file) return res.status(400).json({ ok: false, error: "file ausente" })
+    try { file = decodeURIComponent(file) } catch {}    if (typeof file === "string") file = file.trim()
+    const located = findFileInDownloads(file)
+    if (!located) {
+      console.log(`⚠️ deleteVideo: arquivo não encontrado: ${file}`)
+      return res.status(404).json({ ok: false, error: "arquivo não encontrado" })
+    }
+    fs.unlinkSync(located)
+    console.log(`🗑️ deleteVideo: deletado ${file}`)
+    roundState.playedVideos.delete(file)
+    saveRoundState()
+    database = syncDatabase()
+    return res.json({ ok: true })
+  } catch (e) {
+    console.error("Erro ao deletar vídeo:", e?.message || e)
+    return res.status(500).json({ ok: false, error: "erro interno" })
+  }
+}
+app.post("/api/deleteVideo", deleteVideoHandler);
+app.get("/api/deleteVideo", deleteVideoHandler);
+
