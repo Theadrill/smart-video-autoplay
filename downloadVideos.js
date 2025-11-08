@@ -49,13 +49,59 @@ function resolveDownloadsPath(raw) {
     return path.resolve("./downloads")
 }
 
-let downloadsPath = resolveDownloadsPath(config.downloadsPath)
-if (!fs.existsSync(downloadsPath)) {
-    console.log(`📁 Criando pasta de downloads: ${downloadsPath}`)
-    fs.mkdirSync(downloadsPath, { recursive: true })
-} else {
-    vlog("Pasta verificada:", downloadsPath)
+// ==========================================================
+// Blacklist
+// ==========================================================
+const blacklistPath = path.resolve("blacklist.json")
+let BLACKLIST_IDS = new Set()
+try {
+  if (fs.existsSync(blacklistPath)) {
+    const bl = JSON.parse(fs.readFileSync(blacklistPath, "utf8"))
+    if (Array.isArray(bl.videoIds)) BLACKLIST_IDS = new Set(bl.videoIds)
+  }
+} catch {}const downloadsPath = resolveDownloadsPath(config.downloadsPath)
+if (!fs.existsSync(downloadsPath)) fs.mkdirSync(downloadsPath, { recursive: true })
+
+// ==========================================================
+// 🧠 PROGRESSO DE RETOMADA
+// ==========================================================
+const progressFile = path.join(downloadsPath, "downloads-progress.json")
+
+let progress = { lastVideo: null, status: "completed" }
+try {
+    if (fs.existsSync(progressFile)) progress = JSON.parse(fs.readFileSync(progressFile, "utf8"))
+} catch {}
+
+function saveProgress() {
+    fs.writeFileSync(progressFile, JSON.stringify(progress, null, 2))
 }
+
+// Se último vídeo estava incompleto → limpar seus arquivos
+if (progress.status === "incomplete" && progress.lastVideo) {
+    console.log(`⚠️ Última execução foi interrompida durante: ${progress.lastVideo}`)
+    console.log("🧹 Limpando arquivos incompletos...")
+
+    for (const f of fs.readdirSync(downloadsPath)) {
+        if (f.includes(progress.lastVideo)) {
+            fs.unlinkSync(path.join(downloadsPath, f))
+            console.log(`  ❌ Removido: ${f}`)
+        }
+    }
+
+    progress.status = "completed"
+    saveProgress()
+    console.log("🔁 Ele será reprocessado do zero quando chegar na fila.\n")
+}
+
+// ==========================================================
+// Regras de divisão
+// ==========================================================
+const DEFAULT_FINAL = Number(config.defaultFinalVideoParts ?? 0)
+const MINUTES_LESS_THAN = Number(config.minutesLessThan ?? 12)
+const PARTS_IF_LESS = Number(config.partsIfLess ?? 2)
+const PARTS_IF_MORE = Number(config.partsIfMore ?? 3)
+const MINUTES_MORE_THAN = Number(config.minutesMoreThan ?? 35)
+const BIG_VIDEO_PARTS = Number(config.bigVideoParts ?? 4)
 
 const CACHE_FILE = path.join(downloadsPath, "videos_cache.json")
 
@@ -208,27 +254,12 @@ async function convertAndSplit(job, slot) {
 
 // ===================== EXEC =====================
 ;(async () => {
-    console.log("\n🚀 Iniciando...")
+    initDisplay() // reserva as linhas da HUD desde o início
 
-    // === CACHE AUTO-REBUILD ===
-    let cache = loadCache()
-    let rebuild = false
+    const cache = JSON.parse(fs.readFileSync(CACHE_FILE, "utf8"))
+    const allVideos = Object.values(cache).flat().filter(v => !BLACKLIST_IDS.has(v.id))
 
-    if (!cache || Object.values(cache).flat().length === 0) rebuild = true
-    else {
-        const mp4 = fs.readdirSync(downloadsPath).filter(f => f.endsWith(".mp4"))
-        if (mp4.length < Object.values(cache).flat().length) rebuild = true
-    }
-
-    if (rebuild) {
-        console.log("🔄 Recriando cache...")
-        cache = await collectVideos()
-        console.log("✅ Cache reconstruído.")
-    }
-
-    const videos = Object.values(cache).flat()
-    console.log(`📦 Total de vídeos a baixar: ${videos.length}`)
-    if (videos.length === 0) return console.log("⚠️ Nada para baixar.")
+    console.log(`📦 Total de vídeos na fila: ${allVideos.length}\n`)
 
     const downloadQueue = [...videos]
     const convertQueue = []
@@ -258,3 +289,4 @@ async function convertAndSplit(job, slot) {
 
     console.log(`\n✅ Finalizado — ${done} vídeos processados.\n`)
 })()
+
