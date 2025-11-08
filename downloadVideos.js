@@ -47,7 +47,17 @@ function resolveDownloadsPath(raw) {
     return path.resolve(raw)
 }
 
-const downloadsPath = resolveDownloadsPath(config.downloadsPath)
+// ==========================================================
+// Blacklist
+// ==========================================================
+const blacklistPath = path.resolve("blacklist.json")
+let BLACKLIST_IDS = new Set()
+try {
+  if (fs.existsSync(blacklistPath)) {
+    const bl = JSON.parse(fs.readFileSync(blacklistPath, "utf8"))
+    if (Array.isArray(bl.videoIds)) BLACKLIST_IDS = new Set(bl.videoIds)
+  }
+} catch {}const downloadsPath = resolveDownloadsPath(config.downloadsPath)
 if (!fs.existsSync(downloadsPath)) fs.mkdirSync(downloadsPath, { recursive: true })
 
 // ==========================================================
@@ -374,7 +384,7 @@ async function convertAndSplit(task) {
     initDisplay() // reserva as linhas da HUD desde o início
 
     const cache = JSON.parse(fs.readFileSync(CACHE_FILE, "utf8"))
-    const allVideos = Object.values(cache).flat()
+    const allVideos = Object.values(cache).flat().filter(v => !BLACKLIST_IDS.has(v.id))
 
     console.log(`📦 Total de vídeos na fila: ${allVideos.length}\n`)
 
@@ -411,3 +421,4 @@ async function convertAndSplit(task) {
 
     console.log(`\n✅ Concluídos: ${concluidos}`)
 })()
+
