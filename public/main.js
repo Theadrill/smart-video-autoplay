@@ -5,6 +5,11 @@ async function nextVideo() {
     const res = await fetch("/api/next")
     const data = await res.json()
 
+    // HUD update (non-intrusive)
+    if (window.updateHUD) {
+        try { window.updateHUD(data) } catch {}
+    }
+
     const noVideos = document.getElementById("no-videos")
     const player = document.getElementById("player")
 
@@ -152,3 +157,79 @@ document.addEventListener("fullscreenchange", scheduleCursorHide)
 // Durante clique na barra → cursor some imediatamente
 progress.addEventListener("mousedown", () => document.body.classList.add("hide-cursor"))
 progress.addEventListener("mouseup", scheduleCursorHide)
+
+// ==========================================================
+// Dev HUD (toggle with 'H')
+// ==========================================================
+;(function setupDevHUD(){
+    const hud = document.createElement('div')
+    hud.id = 'dev-hud'
+    hud.style.cssText = [
+        'position:fixed',
+        'top:8px','left:8px','max-width:40vw',
+        'background:rgba(0,0,0,0.6)','color:#fff','padding:8px 10px',
+        'font:12px/1.4 monospace','z-index:9999','border-radius:4px',
+        'display:none','white-space:pre-line','user-select:none'
+    ].join(';')
+    document.body.appendChild(hud)
+
+    let hudVisible = false
+    function setHUDVisible(v){ hudVisible = !!v; hud.style.display = hudVisible ? 'block' : 'none' }
+
+    document.addEventListener('keydown', (e)=>{
+        const k = (e.key||'').toLowerCase()
+        if (k === 'h') setHUDVisible(!hudVisible)
+    })
+
+    function parseLocalFilename(file){
+        try{
+            let base = file.replace(/\.mp4$/i,'')
+            base = base.replace(/\s+parte\s+\d+$/i,'')
+            const parts = base.split(' - ')
+            if (parts.length >= 3){
+                const channel = parts[0].trim()
+                const id = parts[parts.length-1].trim()
+                const title = parts.slice(1, parts.length-1).join(' - ').trim()
+                return {channel,title,id}
+            }
+            return {channel:'', title: base, id: ''}
+        }catch{ return {channel:'',title:'',id:''} }
+    }
+
+    async function fillYouTubeMeta(id){
+        try{
+            const r = await fetch(`/api/info/${encodeURIComponent(id)}`)
+            if (!r.ok) return {channel:'', title:''}
+            const j = await r.json()
+            return { channel: j.channel||'', title: j.title||'' }
+        }catch{ return {channel:'', title:''} }
+    }
+
+    function renderHUD({mode, channel, title, id, nextHint}){
+        const lines = [
+            `MODE: ${mode || ''}`,
+            `CHANNEL: ${channel || ''}`,
+            `TITLE: ${title || ''}`,
+            `ID: ${id || ''}`,
+            `NEXT: ${nextHint || ''}`,
+        ]
+        hud.textContent = lines.join('\n')
+    }
+
+    async function _updateHUD(info){
+        if (!info){ renderHUD({mode:'',channel:'',title:'',id:'',nextHint:''}); return }
+        let mode = (info && info.hls && info.id) ? 'YOUTUBE' : (info && info.file) ? 'LOCAL' : 'UNKNOWN'
+        let channel = '', title = '', id = ''
+        if (mode === 'LOCAL'){
+            const meta = parseLocalFilename(info.file)
+            channel = meta.channel; title = meta.title; id = meta.id
+        } else if (mode === 'YOUTUBE'){
+            id = info.id
+            const meta = await fillYouTubeMeta(id)
+            channel = meta.channel; title = meta.title
+        }
+        renderHUD({mode, channel, title, id, nextHint: ''})
+    }
+
+    window.updateHUD = (info) => { _updateHUD(info) }
+})()
