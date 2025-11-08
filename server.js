@@ -216,6 +216,57 @@ if (config.local !== false) {
   }
 }
 
+// ===================== WATCH CONFIG (mudar local em tempo real) =====================
+let dynamicLocalWatchers = [];
+
+function startLocalWatchersIfNeeded() {
+  if (dynamicLocalWatchers.length) return;
+  for (const folder of downloadsPaths) {
+    if (!fs.existsSync(folder)) continue;
+    console.log("?? Observando:", folder);
+    const w = fs.watch(folder, { persistent: true }, (event, filename) => {
+      if (filename && filename.toLowerCase().endsWith(".mp4")) triggerResync();
+    });
+    dynamicLocalWatchers.push(w);
+  }
+}
+
+function stopLocalWatchers() {
+  try {
+    for (const w of dynamicLocalWatchers) try { w.close(); } catch {}
+  } catch {}
+  dynamicLocalWatchers = [];
+}
+
+try {
+  let cfgWatchTimeout = null;
+  let lastLocalMode = config.local;
+  fs.watch("config.json", { persistent: true }, () => {
+    clearTimeout(cfgWatchTimeout);
+    cfgWatchTimeout = setTimeout(() => {
+      try {
+        const fresh = JSON.parse(fs.readFileSync("config.json", "utf8"));
+        if (fresh && Object.prototype.hasOwnProperty.call(fresh, "local")) {
+          const newLocal = fresh.local;
+          if (newLocal !== lastLocalMode) {
+            console.log(`\n?? Config alterado: local => ${newLocal === false ? "false (YouTube)" : "true (Local)"}`);
+            config.local = newLocal;
+            lastLocalMode = newLocal;
+            if (newLocal === false) {
+              stopLocalWatchers();
+            } else {
+              startLocalWatchersIfNeeded();
+              database = syncDatabase();
+            }
+          }
+        }
+      } catch (e) {
+        console.log("?? Erro ao recarregar config.json:", e?.message || e);
+      }
+    }, 300);
+  });
+} catch {}
+
 function randomChoice(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
