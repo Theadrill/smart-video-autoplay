@@ -376,7 +376,7 @@ async function preloadNextVideo(chKey) {
       fs.mkdirSync(path.dirname(mp4Path), { recursive: true });
       try {
         execSync(
-  `yt-dlp --cookies "cookies.txt" -f "bestvideo+bestaudio" --merge-output-format mp4 -o "${mp4Path}" "https://www.youtube.com/watch?v=${next.id}"`,
+  `yt-dlp --extractor-args "youtube:player_client=android" --cookies "cookies.txt" -f "bestvideo+bestaudio" --merge-output-format mp4 -o "${mp4Path}" "https://www.youtube.com/watch?v=${next.id}"`,
   { stdio: "inherit" }
 );
 
@@ -514,7 +514,7 @@ app.get("/api/next", async (req, res) => {
       console.log(`[YT] ⬇️ Baixando vídeo atual: ${chosen.id}`);
       try {
         execSync(
-  `yt-dlp --cookies "cookies.txt" -f "bestvideo+bestaudio" --merge-output-format mp4 -o "${mp4Path}" "https://www.youtube.com/watch?v=${chosen.id}"`,
+  `yt-dlp --extractor-args "youtube:player_client=android" --cookies "cookies.txt" -f "bestvideo+bestaudio" --merge-output-format mp4 -o "${mp4Path}" "https://www.youtube.com/watch?v=${chosen.id}"`,
   { stdio: "inherit" }
 );
 
