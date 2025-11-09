@@ -12,6 +12,29 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static("public"));
 
+// ===================== LOG FILE (log.txt renovado a cada início) =====================
+try {
+  const logFile = path.resolve("log.txt");
+  try { fs.writeFileSync(logFile, "", "utf8"); } catch {}
+  const logStream = fs.createWriteStream(logFile, { flags: "a" });
+  const ts = () => new Date().toISOString();
+  const mkLine = (level, args) => {
+    const msg = args.map((a) => {
+      if (typeof a === "string") return a;
+      try { return JSON.stringify(a); } catch { return String(a); }
+    }).join(" ");
+    return `[${ts()}] [${level}] ${msg}\n`;
+  };
+  const orig = { log: console.log, error: console.error, warn: console.warn, info: console.info };
+  console.log = (...args) => { try { logStream.write(mkLine("LOG", args)); } catch {} orig.log(...args); };
+  console.error = (...args) => { try { logStream.write(mkLine("ERROR", args)); } catch {} orig.error(...args); };
+  console.warn = (...args) => { try { logStream.write(mkLine("WARN", args)); } catch {} orig.warn(...args); };
+  console.info = (...args) => { try { logStream.write(mkLine("INFO", args)); } catch {} orig.info(...args); };
+  process.on("uncaughtException", (e) => { try { logStream.write(mkLine("UNCAUGHT", [e?.stack || e])); } catch {} orig.error(e); });
+  process.on("unhandledRejection", (e) => { try { logStream.write(mkLine("UNHANDLED", [e?.stack || e])); } catch {} orig.error(e); });
+  process.on("exit", () => { try { logStream.end(); } catch {} });
+} catch {}
+
 // ===================== CONFIG =====================
 const config = JSON.parse(fs.readFileSync("config.json", "utf8"));
 
@@ -316,7 +339,27 @@ loadYtRoundState();
 
 // ===================== STREAM FOLDER =====================
 const streamFolder = path.resolve("stream");
-if (!fs.existsSync(streamFolder)) fs.mkdirSync(streamFolder, { recursive: true });
+// Limpa a pasta de stream na inicialização para evitar acúmulo (log amigável)
+try {
+  let removed = 0;
+  if (fs.existsSync(streamFolder)) {
+    const entries = fs.readdirSync(streamFolder);
+    for (const entry of entries) {
+      try {
+        fs.rmSync(path.join(streamFolder, entry), { recursive: true, force: true });
+        removed++;
+      } catch {}
+    }
+    if (removed > 0) console.log(`[STREAM] Limpeza inicial: ${removed} item(ns) removido(s).`);
+    else console.log(`[STREAM] Limpeza inicial: nenhum arquivo para limpar.`);
+  } else {
+    console.log(`[STREAM] Pasta inexistente, será criada agora.`);
+  }
+  fs.mkdirSync(streamFolder, { recursive: true });
+} catch {
+  // silêncio para evitar quebra de terminal em plataformas diversas
+}
+
 app.use("/stream", express.static(streamFolder, {
   etag: false,
   lastModified: false,
@@ -633,7 +676,7 @@ app.get("/api/next", async (req, res) => {
     console.log(`🎞 Vídeo sorteado: ${escolhido.video}`);
     console.log(`📁 Arquivo: ${escolhido.arquivo}`);
 
-    return res.json({ file: escolhido.arquivo });
+    return res.json({ file: escolhido.arquivo, title: escolhido.video });
   }
 
   // ====== MODO YOUTUBE (rodada separada + filtros) ======
@@ -711,7 +754,7 @@ app.get("/api/next", async (req, res) => {
   console.log(`\n[YT] Canal: ${chKey}`);
   console.log(`[YT] Video: ${chosen.title}  (id=${chosen.id}, age=${chosen.ageDays}d)`);
   preloadNextVideo(chKey);
-  return res.json({ hls: `/stream/${chosen.id}/${chosen.id}.m3u8`, id: chosen.id });
+  return res.json({ hls: `/stream/${chosen.id}/${chosen.id}.m3u8`, id: chosen.id, title: chosen.title, channel: chKey });
 });
 // 🛑 Blacklist (local + YouTube)
 // ==========================================================

@@ -1,0 +1,26 @@
+[2025-11-09T07:23:58.277Z] [LOG] 
+📂 Pastas onde os vídeos serão buscados:
+[2025-11-09T07:23:58.280Z] [LOG]    → C:\VIDEOS PARA TELÃO\downloads
+[2025-11-09T07:23:58.280Z] [LOG]    → D:\VIDEOS PARA TELÃO\downloads
+[2025-11-09T07:23:58.281Z] [LOG]    → E:\VIDEOS PARA TELÃO\downloads
+[2025-11-09T07:23:58.281Z] [LOG]    → F:\VIDEOS PARA TELÃO\downloads
+[2025-11-09T07:23:58.281Z] [LOG] 🎬 MODO YOUTUBE ATIVO → Ignorando pastas locais.
+
+[2025-11-09T07:23:58.282Z] [LOG] 🔄 Sincronizando database com arquivos atuais...
+
+[2025-11-09T07:23:58.373Z] [LOG] ✅ Blacklist carregada.
+[2025-11-09T07:23:58.374Z] [LOG] ✅ Estado da rodada (YouTube) carregado.
+[2025-11-09T07:23:58.379Z] [LOG] [STREAM] Limpeza inicial: 1 item(ns) removido(s).
+[2025-11-09T07:23:58.384Z] [LOG] 
+✅ Servidor rodando: http://localhost:3000
+
+[2025-11-09T07:24:10.739Z] [LOG] [SCRAPER] Aviso: 'gridVideoRenderer' não encontrado (usando ytInitialData)
+[2025-11-09T07:24:20.796Z] [LOG] 
+[YT] Canal: @XGames
+[2025-11-09T07:24:20.797Z] [LOG] [YT] Video: Best of BMX from X Games Salt Lake City 2025 | X Games  (id=tSArI54g_4E, age=30d)
+[2025-11-09T07:24:20.799Z] [LOG] 🗃️ (SCRAPE CACHE) Reutilizando lista do canal: https://www.youtube.com/@XGames
+[2025-11-09T07:24:20.819Z] [LOG] ⏳ (PRELOAD) Gerando HLS do próximo vídeo: QhnghJpd9Vc
+[2025-11-09T07:24:35.396Z] [LOG] ⚠️ (PRELOAD) Falha ao gerar HLS para QhnghJpd9Vc: Command failed: ffmpeg -y -i https://rr6---sn-8p8v-bg0e.googlevideo.com/videoplayback?expire=1762694666&ei=qkEQacquD9Hj1sQP8f3u4A4&ip=187.11.244.113&id=o-ALDlnTyNDE1pUPkNFELJLiQnRl23JRxMgSAZc_Wjl0gT&itag=398&aitags=133%2C134%2C135%2C136%2C137%2C160%2C242%2C243%2C244%2C247%2C248%2C278%2C356%2C394%2C395%2C396%2C397%2C398%2C399&source=youtube&requiressl=yes&xpc=EgVo2aDSNQ%3D%3D&met=1762673066%2C&mh=cV&mm=31%2C29&mn=sn-8p8v-bg0e%2Csn-bg0e6nl7&ms=au%2Crdu&mv=m&mvi=6&pl=24&rms=au%2Cau&ctier=A&pfa=5&initcwndbps=1245000&hightc=yes&siu=1&bui=AdEuB5R4xdhhs2haPKI_-2BAuAYAZaBMuT6yP2TKrwBx9CQ1T1xZ2d6Sd8TtkjM2IcjmPqX10Q&vprv=1&svpuc=1&mime=video%2Fmp4&ns=8Om_Pwi5MtPuZpHiPrKvXFMQ&rqh=1&gir=yes&clen=110515743&dur=618.584&lmt=1753465663453585&mt=1762672627&fvip=5&keepalive=yes&lmw=1&fexp=51557447%2C51565116%2C51565682%2C51580970&c=TVHTML5&sefc=1&txp=443G534&n=HvNWQblvXvKxwQ&sparams=expire%2Cei%2Cip%2Cid%2Caitags%2Csource%2Crequiressl%2Cxpc%2Cctier%2Cpfa%2Chightc%2Csiu%2Cbui%2Cvprv%2Csvpuc%2Cmime%2Cns%2Crqh%2Cgir%2Cclen%2Cdur%2Clmt&sig=AJfQdSswRQIgBAh9twpd0ljoKPqx0x1KsPIB4rYJWAZsrSSMlI6RfRQCIQDlFCOU4kR_orpwXKUqgkiepnHNAwUzfLDjAr8LTGgDbQ%3D%3D&lsparams=met%2Cmh%2Cmm%2Cmn%2Cms%2Cmv%2Cmvi%2Cpl%2Crms%2Cinitcwndbps&lsig=APaTxxMwRQIhAK6qPdyzyEaiSY3V2_5fQkAo3CLr-eadnzVYY4IFx_TmAiBsQaQVhew8IX5LN0uYGYra58wSMEwYV53DcISgxOAz8A%3D%3D -c:v libx264 -preset veryfast -crf 23 -pix_fmt yuv420p -profile:v main -force_key_frames expr:gte(t,n_forced*6) -an -start_number 0 -hls_time 6 -hls_list_size 0 -hls_playlist_type event -hls_flags independent_segments+append_list -hls_segment_filename C:\PROJETOS\smart-video-autoplay\stream\QhnghJpd9Vc\QhnghJpd9Vc_%03d.ts C:\PROJETOS\smart-video-autoplay\stream\QhnghJpd9Vc\QhnghJpd9Vc.m3u8
+[2025-11-09T07:24:36.131Z] [LOG] [SCRAPER] Aviso: 'gridVideoRenderer' não encontrado (usando ytInitialData)
+[2025-11-09T07:24:38.237Z] [LOG] [SCRAPER] Aviso: 'gridVideoRenderer' não encontrado (usando ytInitialData)
+[2025-11-09T07:24:44.322Z] [LOG] ⏳ Não há vídeo anterior.

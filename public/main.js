@@ -1,7 +1,21 @@
-// ==========================================================
-// 📺 Função: Próximo vídeo
+﻿// ==========================================================
+// ðŸ“º FunÃ§Ã£o: PrÃ³ximo vÃ­deo
 // ==========================================================
 let hlsInstance = null
+
+function setLoaderVisible(v){
+    const el = document.getElementById('loader')
+    if (!el) return
+    if (v) el.classList.add('visible')
+    else el.classList.remove('visible')
+}
+
+function setLoaderTitle(text){
+    const t = document.getElementById('loader-title')
+    if (!t) return
+    t.textContent = text ? String(text) : ''
+}
+// Sem porcentagem: apenas mostrar/ocultar loader via eventos
 
 async function nextVideo() {
     const res = await fetch("/api/next")
@@ -15,14 +29,21 @@ async function nextVideo() {
     const noVideos = document.getElementById("no-videos")
     const player = document.getElementById("player")
 
+    // Mostra loader imediatamente para o primeiro e próximos vídeos
+    setLoaderVisible(true)
+        setLoaderTitle("")
+
     if (!data.file && !data.hls) {
-        console.log("⚠️ Nenhum vídeo disponível no servidor.")
+        console.log("[INFO] Nenhum video disponivel no servidor.")
+        setLoaderVisible(false)
         noVideos.classList.add("visible")
-        player.src = "" // garante que pare o vídeo atual caso exista
+        player.src = "" // garante que pare o vÃ­deo atual caso exista
         return
     }
 
     noVideos.classList.remove("visible")
+
+    if (data && data.title) { setLoaderTitle(data.title) }
 
     if (data.hls && data.id) {
         await playHls(data.hls)
@@ -37,7 +58,13 @@ async function playFile(src){
     if (hlsInstance) { try { hlsInstance.destroy() } catch{} hlsInstance = null }
     player.src = src
     player.muted = true
-    await player.play().catch(()=>{ console.log("⚠️ player.play() (file) falhou.") })
+        const onTU = () => { try { if (!player.paused && player.currentTime > 0.05) { setLoaderVisible(false); player.removeEventListener('timeupdate', onTU) } } catch{} }
+        player.addEventListener('timeupdate', onTU)
+        player.addEventListener('loadeddata', ()=>{ setLoaderVisible(false) }, { once:true })
+    player.addEventListener('playing', ()=>{ setLoaderVisible(false) }, { once:true })
+    player.addEventListener('canplay', ()=>{ setLoaderVisible(false) }, { once:true })
+    player.addEventListener('waiting', ()=>{ setLoaderVisible(true) })
+    await player.play().catch(()=>{ console.log("âš ï¸ player.play() (file) falhou.") })
 }
 
 async function playHls(m3u8){
@@ -49,7 +76,13 @@ async function playHls(m3u8){
     if (player.canPlayType('application/vnd.apple.mpegurl')){
         player.src = m3u8
         player.muted = true
-        await player.play().catch(()=>{ console.log("⚠️ player.play() (native HLS) falhou.") })
+        const onTU = () => { try { if (!player.paused && player.currentTime > 0.05) { setLoaderVisible(false); player.removeEventListener('timeupdate', onTU) } } catch{} }
+        player.addEventListener('timeupdate', onTU)
+        player.addEventListener('loadeddata', ()=>{ setLoaderVisible(false) }, { once:true })
+        player.addEventListener('playing', ()=>{ setLoaderVisible(false) }, { once:true })
+        player.addEventListener('canplay', ()=>{ setLoaderVisible(false) }, { once:true })
+        player.addEventListener('waiting', ()=>{ setLoaderVisible(true) })
+        await player.play().catch(()=>{ console.log("âš ï¸ player.play() (native HLS) falhou.") })
         return
     }
 
@@ -61,17 +94,23 @@ async function playHls(m3u8){
         })
         hlsInstance.on(window.Hls.Events.ERROR, (evt, data) => {
             if (data?.fatal) {
-                console.log("⚠️ HLS fatal:", data)
+                console.log("âš ï¸ HLS fatal:", data)
                 try { hlsInstance.destroy() } catch{}
                 hlsInstance = null
-                // pequena re-tentativa após 1s
+                // pequena re-tentativa apÃ³s 1s
                 setTimeout(()=>playHls(m3u8), 1000)
             }
         })
         hlsInstance.loadSource(m3u8)
         hlsInstance.attachMedia(player)
         player.muted = true
-        await player.play().catch(()=>{ console.log("⚠️ player.play() (hls.js) falhou.") })
+        const onTU = () => { try { if (!player.paused && player.currentTime > 0.05) { setLoaderVisible(false); player.removeEventListener('timeupdate', onTU) } } catch{} }
+        player.addEventListener('timeupdate', onTU)
+        player.addEventListener('loadeddata', ()=>{ setLoaderVisible(false) }, { once:true })
+        player.addEventListener('playing', ()=>{ setLoaderVisible(false) }, { once:true })
+        player.addEventListener('canplay', ()=>{ setLoaderVisible(false) }, { once:true })
+        player.addEventListener('waiting', ()=>{ setLoaderVisible(true) })
+        await player.play().catch(()=>{ console.log("âš ï¸ player.play() (hls.js) falhou.") })
         return
     }
 
@@ -81,14 +120,14 @@ async function playHls(m3u8){
 
 
 // ==========================================================
-// ⏪ Função: Vídeo anterior
+// âª FunÃ§Ã£o: VÃ­deo anterior
 // ==========================================================
 async function previousVideo() {
     const res = await fetch("/api/previous")
     const data = await res.json()
 
     if (!data.file) {
-        console.log("⛔ Não há vídeo anterior.")
+        console.log("â›” NÃ£o hÃ¡ vÃ­deo anterior.")
         return
     }
 
@@ -96,24 +135,26 @@ async function previousVideo() {
     player.src = `/video/${encodeURIComponent(data.file)}`
 
     await player.play().catch(() => {
-        console.log("⚠️ player.play() falhou ao voltar.")
+        console.log("âš ï¸ player.play() falhou ao voltar.")
     })
 }
 
 // ==========================================================
-// 🎬 Eventos automáticos
+// ðŸŽ¬ Eventos automÃ¡ticos
 // ==========================================================
 const player = document.getElementById("player")
 player.addEventListener("ended", nextVideo)
 player.addEventListener("error", nextVideo)
 
 // ==========================================================
-// ▶️ Iniciar reprodução
+// â–¶ï¸ Iniciar reproduÃ§Ã£o
 // ==========================================================
+setLoaderVisible(true)
+        setLoaderTitle("")
 nextVideo()
 
 // ==========================================================
-// 🖥️ Fullscreen
+// ðŸ–¥ï¸ Fullscreen
 // ==========================================================
 const container = document.getElementById("player-container")
 
@@ -121,14 +162,14 @@ function enterFullscreen() {
     if (!document.fullscreenElement) {
         if (container.requestFullscreen) container.requestFullscreen()
         else if (container.webkitRequestFullscreen) container.webkitRequestFullscreen()
-        console.log("🖥️ Fullscreen ativado")
+        console.log("ðŸ–¥ï¸ Fullscreen ativado")
         return true
     }
     return false
 }
 
 // ==========================================================
-// 👆 Controles por clique (esquerda / direita)
+// ðŸ‘† Controles por clique (esquerda / direita)
 // ==========================================================
 document.getElementById("click-left").addEventListener("click", () => {
     if (enterFullscreen()) return
@@ -141,7 +182,7 @@ document.getElementById("click-right").addEventListener("click", () => {
 })
 
 // ==========================================================
-// 📊 Barra de Progresso
+// ðŸ“Š Barra de Progresso
 // ==========================================================
 const progress = document.getElementById("progress")
 const progressFill = progress.querySelector(".fill")
@@ -179,7 +220,7 @@ function showProgressBar() {
         progress.classList.remove("visible")
     }, 1500)
 
-    // Também mostra cursor e agenda esconder cursor
+    // TambÃ©m mostra cursor e agenda esconder cursor
     scheduleCursorHide()
 }
 
@@ -187,7 +228,7 @@ container.addEventListener("mousemove", showProgressBar, { passive: true })
 container.addEventListener("touchmove", showProgressBar, { passive: true })
 
 // ==========================================================
-// 🖱 Cursor desaparece após inatividade + durante seek
+// ðŸ–± Cursor desaparece apÃ³s inatividade + durante seek
 // ==========================================================
 let cursorTimeout = null
 
@@ -203,7 +244,7 @@ container.addEventListener("mousemove", scheduleCursorHide, { passive: true })
 container.addEventListener("touchstart", scheduleCursorHide, { passive: true })
 document.addEventListener("fullscreenchange", scheduleCursorHide)
 
-// Durante clique na barra → cursor some imediatamente
+// Durante clique na barra â†’ cursor some imediatamente
 progress.addEventListener("mousedown", () => document.body.classList.add("hide-cursor"))
 progress.addEventListener("mouseup", scheduleCursorHide)
 
