@@ -153,7 +153,13 @@ async function downloadVideo(v) {
     const base = `${sanitize(v.uploader)} - ${sanitize(v.title)} - ${v.id}`
     const temp = path.join(downloadsPath, `${base}.orig.mp4`)
     console.log(`\n⬇️ Baixando: ${base}`)
-    const p = spawn("yt-dlp", [`https://www.youtube.com/watch?v=${v.id}`, "-f", "b[ext=mp4]", "-o", temp, "--newline"])
+    const p = spawn("yt-dlp", [`https://www.youtube.com/watch?v=${v.id}`, "-f", "b[ext=mp4]", "-o", temp, "--newline", "--verbose"])
+    p.stdout.on('data', (data) => {
+        console.log(data.toString());
+    });
+    p.stderr.on('data', (data) => {
+        console.error(data.toString());
+    });
     return new Promise(resolve => {
         p.on("close", async () => {
             if (!fs.existsSync(temp)) return resolve(null)
