@@ -2,7 +2,7 @@ import express from "express";
 import cors from "cors";
 import fs from "fs";
 import path from "path";
-import { execSync } from "child_process";
+import { execSync, spawn } from "child_process";
 import { ensureHLSCache } from "./streamGenerator.js";
 import { getChannelVideosCached, channelKeyFromUrl } from "./youtubeScraper.js";
 
@@ -28,10 +28,28 @@ const cookiesFile = path.resolve("cookies.txt");
 const ytdlpCookies = fs.existsSync(cookiesFile)
   ? ` --cookies "${cookiesFile}"`
   : ` --cookies-from-browser chrome`;
-const ytdlpBase =
-  `yt-dlp --extractor-args "youtube:player_client=android" ` +
-  `-f "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/bv*+ba/b" ` +
-  `--merge-output-format mp4` + ytdlpCookies;
+// Base yt-dlp (não usado diretamente nas execuções abaixo, mantido para referência)
+// Preferimos MP4 progressivo. Em casos com EJS, tentamos client android sem cookies.
+const ytdlpBase = `yt-dlp -f "b[ext=mp4]"` + ytdlpCookies;
+
+function tryDownloadMp4ById(id, outPath) {
+  const url = `https://www.youtube.com/watch?v=${id}`;
+  const attempts = [
+    // 1) Forçar client android e sem cookies para evitar EJS + avisos de cookies
+    `yt-dlp --no-cookies --extractor-args "youtube:player_client=android" -f "b[ext=mp4]" -o "${outPath}" "${url}"`,
+    // 2) Tentar simples progressivo mp4 como no downloadVideos.js
+    `yt-dlp -f "b[ext=mp4]" -o "${outPath}" "${url}"`,
+  ];
+  for (const cmd of attempts) {
+    try {
+      execSync(cmd, { stdio: "inherit" });
+      if (fs.existsSync(outPath)) return true;
+    } catch (e) {
+      // continua para próxima tentativa
+    }
+  }
+  return false;
+}
 
 // Prepend local bin to PATH (wrapper para yt-dlp com cookies)
 try {
@@ -299,7 +317,133 @@ loadYtRoundState();
 // ===================== STREAM FOLDER =====================
 const streamFolder = path.resolve("stream");
 if (!fs.existsSync(streamFolder)) fs.mkdirSync(streamFolder, { recursive: true });
-app.use("/stream", express.static(streamFolder));
+app.use("/stream", express.static(streamFolder, {
+  etag: false,
+  lastModified: false,
+  cacheControl: true,
+  maxAge: 0,
+}));
+
+// ===================== LIVE HLS (stream enquanto baixa) =====================
+const livePipelines = new Map(); // id -> { ytdlp?, ffmpeg }
+
+function ensureLiveHLS(id) {
+  const folder = path.join(streamFolder, id);
+  const m3u8 = path.join(folder, `${id}.m3u8`);
+  if (livePipelines.has(id)) return m3u8;
+
+  try {
+    fs.mkdirSync(folder, { recursive: true });
+    // limpa restos antigos sem apagar pasta do id
+    for (const f of fs.readdirSync(folder)) {
+      try { fs.unlinkSync(path.join(folder, f)); } catch {}
+    }
+  } catch {}
+
+  const url = `https://www.youtube.com/watch?v=${id}`;
+  // Tenta obter URLs separadas (DASH) para v��deo + ��udio (melhor para stream imediato)
+  function getUrls(cmd) {
+    try {
+      const s = execSync(cmd, { encoding: "utf8" }).trim();
+      const lines = s.split(/\r?\n/).filter(Boolean);
+      return lines;
+    } catch { return []; }
+  }
+  let vUrl = null;
+  // Tentativa 1: web (com EJS)
+  if (!vUrl) {
+    const v = getUrls(`yt-dlp --js-runtimes node -g -f "bv*[ext=mp4][height<=720]" "${url}"`);
+    if (v.length) vUrl = v[0];
+  }
+  // Tentativa 2: TV client (evita EJS em muitos casos)
+  if (!vUrl) {
+    const v = getUrls(`yt-dlp --js-runtimes node --extractor-args "youtube:player_client=tv" -g -f "bv*[ext=mp4][height<=720]" "${url}"`);
+    if (v.length) vUrl = v[0];
+  }
+  // Tentativa 3: Android (evita EJS; pode retornar apenas progressivo)
+  let directUrl = null;
+  if (!vUrl) {
+    try {
+      const out = execSync(
+        `yt-dlp --js-runtimes node --no-cookies --extractor-args "youtube:player_client=android" -f "b[ext=mp4][height<=720]/18" -g "${url}"`,
+        { encoding: "utf8" }
+      ).trim();
+      directUrl = out.split(/\r?\n/)[0] || null;
+    } catch {}
+  }
+
+  let ffArgs = [];
+  if (vUrl) {
+    ffArgs = [
+      "-y",
+      "-i", vUrl,
+      "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p",
+      "-profile:v", "main",
+      "-force_key_frames", "expr:gte(t,n_forced*6)",
+      "-an",
+      "-start_number", "0",
+      "-hls_time", "6",
+      "-hls_list_size", "0",
+      "-hls_playlist_type", "event",
+      "-hls_flags", "independent_segments+append_list",
+      "-hls_segment_filename", path.join(folder, `${id}_%03d.ts`),
+      m3u8,
+    ];
+  } else {
+    ffArgs = [
+      "-y",
+      "-i", directUrl || url,
+      "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p",
+      "-profile:v", "main",
+      "-force_key_frames", "expr:gte(t,n_forced*6)",
+      "-an",
+      "-start_number", "0",
+      "-hls_time", "6",
+      "-hls_list_size", "0",
+      "-hls_playlist_type", "event",
+      "-hls_flags", "independent_segments+append_list",
+      "-hls_segment_filename", path.join(folder, `${id}_%03d.ts`),
+      m3u8,
+    ];
+  }
+
+  const f = spawn("ffmpeg", ffArgs, { stdio: ["ignore", "inherit", "inherit"] });
+  function cleanup() {
+    try { f.kill("SIGKILL"); } catch {}
+    livePipelines.delete(id);
+  }
+  f.on("close", () => cleanup());
+  livePipelines.set(id, { ffmpeg: f });
+  return m3u8;
+}
+
+async function waitForFile(p, timeoutMs = 2000, stepMs = 100) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    try {
+      if (fs.existsSync(p) && fs.statSync(p).size > 0) return true;
+    } catch {}
+    await new Promise((r) => setTimeout(r, stepMs));
+  }
+  return false;
+}
+
+async function waitForHlsReady(id, timeoutMs = 5000) {
+  const folder = path.join(streamFolder, id);
+  const m3u8 = path.join(folder, `${id}.m3u8`);
+  const firstSeg = path.join(folder, `${id}_000.ts`);
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    try {
+      if (fs.existsSync(firstSeg) && fs.statSync(firstSeg).size > 0 && fs.existsSync(m3u8)) {
+        const txt = fs.readFileSync(m3u8, 'utf8');
+        if (/#EXTINF:/i.test(txt)) return true;
+      }
+    } catch {}
+    await new Promise(r => setTimeout(r, 150));
+  }
+  return false;
+}
 
 // ===================== CONCURRENCY AUTO (modo C) =====================
 let preloadInFlight = false;
@@ -370,30 +514,85 @@ async function preloadNextVideo(chKey) {
     const next = candidates.find((v) => v.ageDays <= 30) || candidates[0];
     if (!next) return;
 
-    const mp4Path = path.join(streamFolder, next.id, `${next.id}.mp4`);
-    if (!fs.existsSync(mp4Path)) {
-      console.log(`⏳ (PRELOAD) Baixando próximo vídeo: ${next.id}`);
-      fs.mkdirSync(path.dirname(mp4Path), { recursive: true });
+    // Preload HLS direto (prioriza DASH; fallback progressivo)
+    const folder = path.join(streamFolder, next.id);
+    const m3u8 = path.join(folder, `${next.id}.m3u8`);
+    if (fs.existsSync(m3u8)) {
+      console.log(`✅ (PRELOAD) Já existe HLS para: ${next.id}`);
+    } else {
+      console.log(`⏳ (PRELOAD) Gerando HLS do próximo vídeo: ${next.id}`);
+      fs.mkdirSync(folder, { recursive: true });
+
+      function getUrls(cmd) {
+        try { const s = execSync(cmd, { encoding: "utf8" }).trim(); return s.split(/\r?\n/).filter(Boolean); } catch { return []; }
+      }
+      const url = `https://www.youtube.com/watch?v=${next.id}`;
+      let vUrl = null, directUrl = null;
+      // web + EJS
+      if (!vUrl) {
+        const v = getUrls(`yt-dlp --js-runtimes node -g -f "bv*[ext=mp4][height<=720]" "${url}"`);
+        if (v.length) vUrl = v[0];
+      }
+      // TV client
+      if (!vUrl) {
+        const v = getUrls(`yt-dlp --js-runtimes node --extractor-args "youtube:player_client=tv" -g -f "bv*[ext=mp4][height<=720]" "${url}"`);
+        if (v.length) vUrl = v[0];
+      }
+      
+      // Fallback progressivo
+      if (!vUrl) {
+        try {
+          const out = execSync(`yt-dlp --js-runtimes node -g -f "b[ext=mp4][height<=720]/18" "${url}"`, { encoding: "utf8" }).trim();
+          directUrl = out.split(/\r?\n/)[0] || null;
+        } catch {}
+      }
+
+      let ffArgs = [];
+      if (vUrl) {
+        ffArgs = [
+          "-y",
+          "-i", vUrl,
+          "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p",
+          "-profile:v", "main",
+          "-force_key_frames", "expr:gte(t,n_forced*6)",
+          "-an",
+          "-start_number", "0",
+          "-hls_time", "6",
+          "-hls_list_size", "0",
+          "-hls_playlist_type", "event",
+          "-hls_flags", "independent_segments+append_list",
+          "-hls_segment_filename", path.join(folder, `${next.id}_%03d.ts`),
+          m3u8,
+        ];
+      } else if (directUrl) {
+        ffArgs = [
+          "-y",
+          "-i", directUrl,
+          "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p",
+          "-profile:v", "main",
+          "-force_key_frames", "expr:gte(t,n_forced*6)",
+          "-an",
+          "-start_number", "0",
+          "-hls_time", "6",
+          "-hls_list_size", "0",
+          "-hls_playlist_type", "event",
+          "-hls_flags", "independent_segments+append_list",
+          "-hls_segment_filename", path.join(folder, `${next.id}_%03d.ts`),
+          m3u8,
+        ];
+      } else {
+        console.log(`⚠️ (PRELOAD) Não foi possível obter URLs para: ${next.id}`);
+        return;
+      }
+
       try {
-        execSync(
-  `yt-dlp --extractor-args "youtube:player_client=android" --cookies "cookies.txt" -f "bestvideo+bestaudio" --merge-output-format mp4 -o "${mp4Path}" "https://www.youtube.com/watch?v=${next.id}"`,
-  { stdio: "inherit" }
-);
-
-
+        execSync(`ffmpeg ${ffArgs.map(a => (a.includes(' ') ? `"${a}"` : a)).join(' ')}`, { stdio: "inherit" });
+        console.log(`✅ (PRELOAD) Próximo vídeo pronto: ${next.id}`);
       } catch (e) {
-        console.log(`⚠️ (PRELOAD) Falha no yt-dlp para ${next.id}:`, e?.message || e);
+        console.log(`⚠️ (PRELOAD) Falha ao gerar HLS para ${next.id}:`, e?.message || e);
         return;
       }
     }
-
-    if (fs.existsSync(mp4Path)) {
-      ensureHLSCache(mp4Path, streamFolder, next.id);
-    } else {
-      console.log(`[PRELOAD] MP4 ausente após yt-dlp: ${mp4Path}`);
-      return;
-    }
-    console.log(`✅ (PRELOAD) Próximo vídeo pronto: ${next.id}`);
   } catch (e) {
     console.log("⚠️ Erro no preload:", e?.message || e);
   } finally {
@@ -506,44 +705,14 @@ app.get("/api/next", async (req, res) => {
     chosen.id,
   ];
   saveYtRoundState();
-
-  try {
-    const mp4Path = path.join(streamFolder, chosen.id, `${chosen.id}.mp4`);
-    if (!fs.existsSync(mp4Path)) {
-      fs.mkdirSync(path.dirname(mp4Path), { recursive: true });
-      console.log(`[YT] ⬇️ Baixando vídeo atual: ${chosen.id}`);
-      try {
-        execSync(
-  `yt-dlp --extractor-args "youtube:player_client=android" --cookies "cookies.txt" -f "bestvideo+bestaudio" --merge-output-format mp4 -o "${mp4Path}" "https://www.youtube.com/watch?v=${chosen.id}"`,
-  { stdio: "inherit" }
-);
-
-      } catch (e) {
-        console.log(`[YT] yt-dlp falhou para ${chosen.id}:`, e?.message || e);
-        return res.json({ hls: null, id: null, error: "yt-dlp failed" });
-      }
-    }
-
-    if (fs.existsSync(mp4Path)) {
-      ensureHLSCache(mp4Path, streamFolder, chosen.id);
-    } else {
-      console.log(`[YT] MP4 ausente após yt-dlp: ${mp4Path}`);
-      return res.json({ hls: null, id: null, error: "download missing" });
-    }
-  } catch (e) {
-    console.log("[YT] Falha no download/conversão:", e?.message || e);
-    return res.json({ hls: null, id: null, error: "yt-dlp failed" });
-  }
-
-  console.log(`\n[YT] 🎬 Canal: ${chKey}`);
-  console.log(`[YT] 🎞 Vídeo: ${chosen.title}  (id=${chosen.id}, age=${chosen.ageDays}d)`);
-
+  const liveM3U8 = ensureLiveHLS(chosen.id);
+  // Esperar o manifest e o primeiro segmento aparecerem
+  await waitForHlsReady(chosen.id, 7000);
+  console.log(`\n[YT] Canal: ${chKey}`);
+  console.log(`[YT] Video: ${chosen.title}  (id=${chosen.id}, age=${chosen.ageDays}d)`);
   preloadNextVideo(chKey);
-
   return res.json({ hls: `/stream/${chosen.id}/${chosen.id}.m3u8`, id: chosen.id });
 });
-
-// ==========================================================
 // 🛑 Blacklist (local + YouTube)
 // ==========================================================
 app.post("/api/blacklist", async (req, res) => {
@@ -702,3 +871,8 @@ app.get("/api/info/:id", async (req, res) => {
     return res.json({ channel: null, title: null });
   }
 });
+
+
+
+
+

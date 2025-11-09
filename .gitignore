@@ -3,6 +3,7 @@
 roundState.json
 played.json
 database.json
+/stream
 # Logs
 logs
 *.log

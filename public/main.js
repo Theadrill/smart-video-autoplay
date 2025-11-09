@@ -1,6 +1,8 @@
 // ==========================================================
 // 📺 Função: Próximo vídeo
 // ==========================================================
+let hlsInstance = null
+
 async function nextVideo() {
     const res = await fetch("/api/next")
     const data = await res.json()
@@ -13,7 +15,7 @@ async function nextVideo() {
     const noVideos = document.getElementById("no-videos")
     const player = document.getElementById("player")
 
-    if (!data.file) {
+    if (!data.file && !data.hls) {
         console.log("⚠️ Nenhum vídeo disponível no servidor.")
         noVideos.classList.add("visible")
         player.src = "" // garante que pare o vídeo atual caso exista
@@ -22,12 +24,59 @@ async function nextVideo() {
 
     noVideos.classList.remove("visible")
 
-    player.src = `/video/${encodeURIComponent(data.file)}`
-    player.muted = true
+    if (data.hls && data.id) {
+        await playHls(data.hls)
+    } else if (data.file) {
+        await playFile(`/video/${encodeURIComponent(data.file)}`)
+    }
+}
 
-    await player.play().catch(() => {
-        console.log("⚠️ player.play() falhou, tentando novamente.")
-    })
+async function playFile(src){
+    const player = document.getElementById("player")
+    // cleanup HLS se existir
+    if (hlsInstance) { try { hlsInstance.destroy() } catch{} hlsInstance = null }
+    player.src = src
+    player.muted = true
+    await player.play().catch(()=>{ console.log("⚠️ player.play() (file) falhou.") })
+}
+
+async function playHls(m3u8){
+    const player = document.getElementById("player")
+    // cleanup anterior
+    if (hlsInstance) { try { hlsInstance.destroy() } catch{} hlsInstance = null }
+
+    // Safari / nativo HLS
+    if (player.canPlayType('application/vnd.apple.mpegurl')){
+        player.src = m3u8
+        player.muted = true
+        await player.play().catch(()=>{ console.log("⚠️ player.play() (native HLS) falhou.") })
+        return
+    }
+
+    if (window.Hls && window.Hls.isSupported()){
+        hlsInstance = new window.Hls({
+            lowLatencyMode: false,
+            backBufferLength: 30,
+            maxLiveSyncPlaybackRate: 1.5,
+        })
+        hlsInstance.on(window.Hls.Events.ERROR, (evt, data) => {
+            if (data?.fatal) {
+                console.log("⚠️ HLS fatal:", data)
+                try { hlsInstance.destroy() } catch{}
+                hlsInstance = null
+                // pequena re-tentativa após 1s
+                setTimeout(()=>playHls(m3u8), 1000)
+            }
+        })
+        hlsInstance.loadSource(m3u8)
+        hlsInstance.attachMedia(player)
+        player.muted = true
+        await player.play().catch(()=>{ console.log("⚠️ player.play() (hls.js) falhou.") })
+        return
+    }
+
+    // Fallback: tentar tocar direto mesmo sem suporte
+    await playFile(m3u8)
 }
 
 
