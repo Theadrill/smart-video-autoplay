@@ -329,6 +329,7 @@ async function preloadNextVideo(chKey) {
   { stdio: "inherit" }
 );
 
+
       } catch (e) {
         console.log(`⚠️ (PRELOAD) Falha no yt-dlp para ${next.id}:`, e?.message || e);
         return;
