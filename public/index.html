@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="pt-BR">
     <head>
         <meta charset="UTF-8" />
@@ -16,6 +16,12 @@
 
             <!-- Player de vídeo -->
             <video id="player" autoplay muted playsinline></video>
+            <!-- Controles (aparecem apenas em fullscreen) -->
+            <div id="controls" aria-hidden="true">
+                <button id="btn-prev" type="button" title="Anterior">⏮️</button>
+                <button id="btn-play" type="button" title="Play/Pause">⏯️</button>
+                <button id="btn-next" type="button" title="Próximo">⏭️</button>
+            </div>
 
             <!-- Barra de progresso -->
             <div id="progress">
@@ -42,3 +48,5 @@
         <script src="main.js"></script>
     </body>
 </html>
+
+

@@ -150,6 +150,34 @@ video,
     text-overflow: ellipsis;
 }
 
+/* Controles de reprodução (apenas em fullscreen) */
+#controls {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: 80px; /* acima da progress bar (65px) */
+    display: none; /* só mostra em fullscreen via JS */
+    gap: 12px;
+    z-index: 25;
+    padding: 8px 10px;
+    background: rgba(0,0,0,0.35);
+    border-radius: 999px;
+}
+
+#controls button {
+    cursor: pointer;
+    border: 0;
+    border-radius: 6px;
+    background: rgba(255,255,255,0.12);
+    color: #fff;
+    font-size: 18px;
+    padding: 8px 10px;
+}
+
+#controls button:active {
+    transform: scale(0.97);
+}
+
 @keyframes spin {
     from { transform: rotate(0deg); }
     to   { transform: rotate(360deg); }

@@ -45,6 +45,7 @@ const downloadsPaths = Array.isArray(config.downloadsPath)
 const dbPath = path.resolve("database.json");
 const roundStatePath = path.resolve("roundState.json");
 const blacklistPath = path.resolve("blacklist.json");
+const configPath = path.resolve("config.json");
 
 // ===================== YT-DLP CONFIG =====================
 const cookiesFile = path.resolve("cookies.txt");
@@ -287,6 +288,8 @@ try {
     cfgWatchTimeout = setTimeout(() => {
       try {
         const fresh = JSON.parse(fs.readFileSync("config.json", "utf8"));
+
+        // 1) Modo local/YouTube
         if (fresh && Object.prototype.hasOwnProperty.call(fresh, "local")) {
           const newLocal = fresh.local;
           if (newLocal !== lastLocalMode) {
@@ -300,6 +303,20 @@ try {
               database = syncDatabase();
             }
           }
+        }
+
+        // 2) URLs de canais (atualiza em tempo real na struct de config)
+        const norm = (arr) => (Array.isArray(arr) ? arr : []).map((s) => String(s || "").trim()).filter(Boolean);
+        const currentList = norm(config.streamUrls || config.urls || []);
+        const freshList = norm(fresh.streamUrls || fresh.urls || []);
+        const changedChannels =
+          currentList.length !== freshList.length ||
+          currentList.some((u) => !freshList.includes(u)) ||
+          freshList.some((u) => !currentList.includes(u));
+        if (changedChannels) {
+          if (Object.prototype.hasOwnProperty.call(fresh, "streamUrls")) config.streamUrls = fresh.streamUrls;
+          if (Object.prototype.hasOwnProperty.call(fresh, "urls")) config.urls = fresh.urls;
+          console.log(`\n[YT] Config alterado: canais => ${freshList.length} (antes ${currentList.length})`);
         }
       } catch (e) {
         console.log("?? Erro ao recarregar config.json:", e?.message || e);
@@ -337,6 +354,45 @@ function saveYtRoundState() {
 }
 loadYtRoundState();
 
+// ===================== WATCH CONFIG (URLs de canais em tempo real) =====================
+try {
+  let cfgWatchChannelsTimeout = null;
+  const norm = (arr) => (Array.isArray(arr) ? arr : []).map((s) => String(s || "").trim()).filter(Boolean);
+  fs.watch("config.json", { persistent: true }, () => {
+    clearTimeout(cfgWatchChannelsTimeout);
+    cfgWatchChannelsTimeout = setTimeout(() => {
+      try {
+        const fresh = JSON.parse(fs.readFileSync("config.json", "utf8"));
+        const newList = norm(fresh.streamUrls || fresh.urls || []);
+        const oldList = norm(config.streamUrls || config.urls || []);
+        const changed =
+          newList.length !== oldList.length ||
+          newList.some((u) => !oldList.includes(u)) ||
+          oldList.some((u) => !newList.includes(u));
+        if (!changed) return;
+
+        // Atualiza config em memória
+        if (Object.prototype.hasOwnProperty.call(fresh, "streamUrls")) config.streamUrls = fresh.streamUrls;
+        if (Object.prototype.hasOwnProperty.call(fresh, "urls")) config.urls = fresh.urls;
+
+        // Reset controlado da rodada YT para refletir nova lista de canais
+        const keys = new Set(newList.map((u) => channelKeyFromUrl(u)));
+        ytRoundState.playedChannelsThisRound = [];
+        const pruned = {};
+        for (const k of Object.keys(ytRoundState.playedVideosByChannel || {})) {
+          if (keys.has(k)) pruned[k] = ytRoundState.playedVideosByChannel[k];
+        }
+        ytRoundState.playedVideosByChannel = pruned;
+        saveYtRoundState();
+
+        console.log(`[YT] Lista de canais atualizada em runtime. Canais ativos: ${[...keys].join(", ")}`);
+      } catch (e) {
+        console.log("[YT] Erro ao processar mudança de canais:", e?.message || e);
+      }
+    }, 200);
+  });
+} catch {}
+
 // ===================== STREAM FOLDER =====================
 const streamFolder = path.resolve("stream");
 // Limpa a pasta de stream na inicialização para evitar acúmulo (log amigável)
@@ -368,7 +424,52 @@ app.use("/stream", express.static(streamFolder, {
 }));
 
 // ===================== LIVE HLS (stream enquanto baixa) =====================
-const livePipelines = new Map(); // id -> { ytdlp?, ffmpeg }
+const livePipelines = new Map(); // id -> { ffmpeg, ytdlp? }
+
+function stopLivePipeline(id) {
+  let stoppedFfmpeg = false;
+  let stoppedYtdlp = false;
+  try {
+    const p = livePipelines.get(id);
+    if (p) {
+      if (p.ffmpeg) {
+        try {
+          console.log(`[STREAM] Parando ffmpeg do id=${id} (pid=${p.ffmpeg.pid || 'n/a'})`);
+          p.ffmpeg.kill("SIGKILL");
+          stoppedFfmpeg = true;
+        } catch {}
+      }
+      if (p.ytdlp) {
+        try {
+          console.log(`[STREAM] Parando yt-dlp do id=${id} (pid=${p.ytdlp.pid || 'n/a'})`);
+          p.ytdlp.kill("SIGKILL");
+          stoppedYtdlp = true;
+        } catch {}
+      }
+    }
+  } catch {}
+  livePipelines.delete(id);
+  return { stoppedFfmpeg, stoppedYtdlp };
+}
+
+function stopAllLivePipelines(exceptId = null) {
+  let totalFfmpeg = 0;
+  let totalYtdlp = 0;
+  try {
+    for (const [k] of livePipelines) {
+      if (exceptId && k === exceptId) continue;
+      const r = stopLivePipeline(k);
+      if (r.stoppedFfmpeg) totalFfmpeg++;
+      if (r.stoppedYtdlp) totalYtdlp++;
+    }
+  } catch {}
+  if (totalFfmpeg || totalYtdlp) {
+    console.log(`[STREAM] Pipelines encerrados: ffmpeg=${totalFfmpeg}, yt-dlp=${totalYtdlp}`);
+  } else {
+    console.log(`[STREAM] Nenhum pipeline ativo para encerrar.`);
+  }
+  return { totalFfmpeg, totalYtdlp };
+}
 
 function ensureLiveHLS(id) {
   const folder = path.join(streamFolder, id);
@@ -452,11 +553,11 @@ function ensureLiveHLS(id) {
 
   const f = spawn("ffmpeg", ffArgs, { stdio: ["ignore", "inherit", "inherit"] });
   function cleanup() {
-    try { f.kill("SIGKILL"); } catch {}
-    livePipelines.delete(id);
+    stopLivePipeline(id);
   }
   f.on("close", () => cleanup());
   livePipelines.set(id, { ffmpeg: f });
+  console.log(`[STREAM] ffmpeg iniciado para id=${id} (pid=${f.pid || 'n/a'})`);
   return m3u8;
 }
 
@@ -748,6 +849,9 @@ app.get("/api/next", async (req, res) => {
     chosen.id,
   ];
   saveYtRoundState();
+  // Antes de iniciar um novo stream, pare quaisquer pipelines anteriores para evitar acúmulo
+  const stopped = stopAllLivePipelines(chosen.id);
+  console.log(`[YT] Indo para o próximo vídeo (id=${chosen.id}). Encerrados: ffmpeg=${stopped.totalFfmpeg}, yt-dlp=${stopped.totalYtdlp}`);
   const liveM3U8 = ensureLiveHLS(chosen.id);
   // Esperar o manifest e o primeiro segmento aparecerem
   await waitForHlsReady(chosen.id, 7000);
@@ -762,6 +866,13 @@ app.post("/api/blacklist", async (req, res) => {
   const { id, file } = req.body || {};
 
   if (id) {
+    // Pare stream ativo (se houver) para este vídeo
+    try {
+      const r = stopLivePipeline(id);
+      if (r.stoppedFfmpeg || r.stoppedYtdlp) {
+        console.log(`[STREAM] Encerrado(s) para blacklist id=${id}: ffmpeg=${r.stoppedFfmpeg ? 1 : 0}, yt-dlp=${r.stoppedYtdlp ? 1 : 0}`);
+      }
+    } catch {}
     if (!blacklist.videoIds.has(id)) blacklist.videoIds.add(id);
     saveBlacklist();
 
@@ -840,6 +951,72 @@ app.get("/video/:name", (req, res) => {
 });
 
 // ==========================================================
+// Healthcheck simples (para o player reconectar)
+// ==========================================================
+app.get("/health", (req, res) => res.json({ ok: true }));
+
+// ==========================================================
+// API - Gerenciar canais em tempo real (YouTube)
+// ==========================================================
+function normalizeList(arr) {
+  return (Array.isArray(arr) ? arr : [])
+    .map((s) => String(s || "").trim())
+    .filter(Boolean);
+}
+
+function setChannelsRuntime(newList, reason = "runtime") {
+  const list = Array.from(new Set(normalizeList(newList)));
+  // Atualiza em memória (manter compat: ambos campos)
+  config.streamUrls = list;
+  config.urls = list;
+  // Persistir no arquivo
+  try {
+    const json = JSON.parse(fs.readFileSync(configPath, "utf8"));
+    json.streamUrls = list;
+    json.urls = list;
+    fs.writeFileSync(configPath, JSON.stringify(json, null, 2), "utf8");
+  } catch (e) {
+    console.log("[YT] Falha ao salvar config.json:", e?.message || e);
+  }
+
+  // Reset de rodada YT coerente com nova lista
+  const keys = new Set(list.map((u) => channelKeyFromUrl(u)));
+  ytRoundState.playedChannelsThisRound = [];
+  const pruned = {};
+  for (const k of Object.keys(ytRoundState.playedVideosByChannel || {})) {
+    if (keys.has(k)) pruned[k] = ytRoundState.playedVideosByChannel[k];
+  }
+  ytRoundState.playedVideosByChannel = pruned;
+  saveYtRoundState();
+
+  console.log(`[YT] Canais atualizados (${reason}). Total: ${list.length}`);
+  return list;
+}
+
+app.get("/api/channels", (req, res) => {
+  return res.json({ urls: normalizeList(config.streamUrls || config.urls || []) });
+});
+
+app.post("/api/channels/add", (req, res) => {
+  const incoming = normalizeList(req.body?.urls || (req.body?.url ? [req.body.url] : []));
+  if (!incoming.length) return res.status(400).json({ ok: false, error: "informe url(s)" });
+  const current = normalizeList(config.streamUrls || config.urls || []);
+  const next = Array.from(new Set([...current, ...incoming]));
+  const final = setChannelsRuntime(next, "API add");
+  return res.json({ ok: true, urls: final });
+});
+
+app.post("/api/channels/remove", (req, res) => {
+  const incoming = normalizeList(req.body?.urls || (req.body?.url ? [req.body.url] : []));
+  if (!incoming.length) return res.status(400).json({ ok: false, error: "informe url(s)" });
+  const current = normalizeList(config.streamUrls || config.urls || []);
+  const toRemove = new Set(incoming);
+  const next = current.filter((u) => !toRemove.has(u));
+  const final = setChannelsRuntime(next, "API remove");
+  return res.json({ ok: true, urls: final });
+});
+
+// ==========================================================
 // 🔥 Deletar vídeo (compat)
 // ==========================================================
 const deleteVideoHandler = (req, res) => {
@@ -861,6 +1038,16 @@ const deleteVideoHandler = (req, res) => {
       return res.status(404).json({ ok: false, file, error: "arquivo não encontrado" });
     }
 
+    // Se for um HLS atual, tente parar o pipeline associado ao ID extraído
+    try {
+      const maybeId = extractIdFromFilename(path.basename(located));
+      if (maybeId) {
+        const r = stopLivePipeline(maybeId);
+        if (r.stoppedFfmpeg || r.stoppedYtdlp) {
+          console.log(`[STREAM] Encerrado(s) para delete file id=${maybeId}: ffmpeg=${r.stoppedFfmpeg ? 1 : 0}, yt-dlp=${r.stoppedYtdlp ? 1 : 0}`);
+        }
+      }
+    } catch {}
     fs.unlinkSync(located);
     console.log(`🗑️  DELETADO => ${file}`);
 
