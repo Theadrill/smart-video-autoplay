@@ -25,7 +25,10 @@
     "@RedBullSurfing",
     "@RedBullSurfing",
     "@RedBullSurfing",
-    "@RedBullSurfing"
+    "@RedBullSurfing",
+    "@conmebol",
+    "@redbull",
+    "@UEFA"
   ],
   "playedVideosByChannel": {
     "@XGames": [
@@ -58,6 +61,15 @@
     ],
     "@RedBullBike": [
       "9Rcf_uS8QTQ"
+    ],
+    "@conmebol": [
+      "B7TGQ0kRSQg"
+    ],
+    "@redbull": [
+      "p5nuzBBdY3c"
+    ],
+    "@UEFA": [
+      "me6fjUUQ14w"
     ]
   }
 }
