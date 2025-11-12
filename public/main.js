@@ -89,7 +89,7 @@ async function playFile(src){
   player.src = src
   player.muted = true
   awaitingFirstFrame = true
-  await player.play().catch(()=> console.log('[player] play() (file) falhou'))
+  await player.play().catch(e => console.log('[player] play() (file) falhou', e))
 }
 
 async function playHls(m3u8){
@@ -128,7 +128,17 @@ player.addEventListener('canplay',    ()=>{ clearStallTimer(); setLoaderVisible(
 player.addEventListener('playing',    ()=>{ clearStallTimer(); setLoaderVisible(false) })
 player.addEventListener('waiting', onBufferingStart)
 player.addEventListener('stalled', onBufferingStart)
-player.addEventListener('timeupdate', ()=>{ if (awaitingFirstFrame && !player.paused && player.currentTime > 0.05){ clearStallTimer(); setLoaderVisible(false); awaitingFirstFrame=false } })
+player.addEventListener('timeupdate', () => {
+    if (awaitingFirstFrame && !player.paused && player.currentTime > 0.05) {
+        clearStallTimer()
+        setLoaderVisible(false)
+        awaitingFirstFrame = false
+    }
+    if (player.duration) {
+        const progressPercent = (player.currentTime / player.duration) * 100
+        progressFill.style.width = `${progressPercent}%`
+    }
+})
 player.addEventListener('ended', nextVideo)
 player.addEventListener('error', nextVideo)
 
@@ -146,134 +156,103 @@ rightZone.addEventListener('click', ()=>{ enterFullscreen(); updateControlsVisib
 leftZone.addEventListener('touchstart', (e)=>{ e.preventDefault(); enterFullscreen(); updateControlsVisibility() }, { passive:false })
 rightZone.addEventListener('touchstart', (e)=>{ e.preventDefault(); enterFullscreen(); updateControlsVisibility() }, { passive:false })
 
-// Controles visíveis apenas em fullscreen
+// Controles visíveis
 const controls = document.getElementById('controls')
 const btnPrev = document.getElementById('btn-prev')
 const btnPlay = document.getElementById('btn-play')
 const btnNext = document.getElementById('btn-next')
 
-let controlsHideTimer=null;function hideControls(){if(!controls)return;controls.style.display='none';controls.setAttribute('aria-hidden','true')}function showControls(){if(!controls)return;if(!document.fullscreenElement){hideControls();return}controls.style.display='flex';controls.setAttribute('aria-hidden','false');if(controlsHideTimer)clearTimeout(controlsHideTimer);controlsHideTimer=setTimeout(hideControls,2000)}function updateControlsVisibility(){if(document.fullscreenElement)showControls();else hideControls()}document.addEventListener('fullscreenchange',updateControlsVisibility);updateControlsVisibility();container.addEventListener('mousemove',showControls,{passive:true});container.addEventListener('touchstart',showControls,{passive:true})
+let controlsHideTimer = null
+function hideControls() {
+    if (!controls) return
+    controls.style.display = 'none'
+    controls.setAttribute('aria-hidden', 'true')
+}
+function showControls() {
+    if (!controls) return
+    controls.style.display = 'flex'
+    controls.setAttribute('aria-hidden', 'false')
+    if (controlsHideTimer) clearTimeout(controlsHideTimer)
+    controlsHideTimer = setTimeout(hideControls, 2000)
+}
+function updateControlsVisibility() {
+    showControls()
+}
+document.addEventListener('fullscreenchange', updateControlsVisibility)
+updateControlsVisibility()
+container.addEventListener('mousemove', showControls, { passive: true })
+container.addEventListener('touchstart', showControls, { passive: true })
 
 // Atualiza ícone do play conforme estado atual
-try{
-  const p0 = document.getElementById('player')
-  if (btnPlay && p0) btnPlay.textContent = p0.paused ? '▶️' : '⏸️'
-}catch{}
+try {
+    const p0 = document.getElementById('player')
+    if (btnPlay && p0) btnPlay.textContent = p0.paused ? '▶️' : '⏸️'
+} catch {}
 
-player.addEventListener('play', ()=>{ if (btnPlay) btnPlay.textContent = '⏸️' })
-player.addEventListener('pause', ()=>{ if (btnPlay) btnPlay.textContent = '▶️' })
-
-btnPrev?.addEventListener('click', async ()=>{
-  const p = document.getElementById('player')
-  if (p && p.currentTime > 5){
-    try { p.currentTime = 0 } catch {}
-    if (typeof showProgressBar === 'function') showProgressBar()
-  } else {
-    await previousVideo()
-  }
+player.addEventListener('play', () => {
+    if (btnPlay) btnPlay.textContent = '⏸️'
 })
-btnNext?.addEventListener('click', ()=>{ try{ setLoaderVisible(true); setLoaderTitle('Carregando proximo video') }catch{}; nextVideo() })
-btnPlay?.addEventListener('click', ()=>{ const p=document.getElementById('player'); if(!p) return; try{ if(p.paused){ p.play().catch(()=>{}); if(btnPlay) btnPlay.textContent='⏸️' } else { p.pause(); if(btnPlay) btnPlay.textContent='▶️' } }catch{} })
-// ===== Progress bar (restaurado) =====
+player.addEventListener('pause', () => {
+    if (btnPlay) btnPlay.textContent = '▶️'
+})
+
+btnPrev?.addEventListener('click', async () => {
+    const p = document.getElementById('player')
+    if (p && p.currentTime > 5) {
+        try {
+            p.currentTime = 0
+        } catch {}
+        if (typeof showProgressBar === 'function') showProgressBar()
+    } else {
+        await previousVideo()
+    }
+})
+btnNext?.addEventListener('click', () => {
+    try {
+        setLoaderVisible(true)
+        setLoaderTitle('Carregando proximo video')
+    } catch {}
+    nextVideo()
+})
+btnPlay?.addEventListener('click', () => {
+    const p = document.getElementById('player')
+    if (!p) return
+    try {
+        if (p.paused) {
+            p.play().catch(() => {})
+            if (btnPlay) btnPlay.textContent = '⏸️'
+        } else {
+            p.pause()
+            if (btnPlay) btnPlay.textContent = '▶️'
+        }
+    } catch {}
+})
+
+// ===== Barra de Progresso =====
 const progress = document.getElementById('progress')
 const progressFill = progress.querySelector('.fill')
-    player.addEventListener('timeupdate', ()=>{
-      const ct = Number.isFinite(player.currentTime) ? player.currentTime : 0
-      let pct = null
-      const d = player.duration
-      if (Number.isFinite(d) && d > 0){
-        pct = ct / d
-      } else if (player.seekable && player.seekable.length > 0){
-        try{
-          const i = player.seekable.length - 1
-          const start = player.seekable.start(i)
-          const end = player.seekable.end(i)
-          const span = end - start
-          if (Number.isFinite(span) && span > 0){
-            const pos = Math.max(start, Math.min(end, ct))
-            pct = (pos - start) / span
-          }
-        }catch{}
-      } else if (player.buffered && player.buffered.length > 0){
-        try{
-          const i = player.buffered.length - 1
-          const end = player.buffered.end(i)
-          if (Number.isFinite(end) && end > 0) pct = Math.max(0, Math.min(1, ct / end))
-        }catch{}
-      }
-      if (pct == null || !Number.isFinite(pct)) return
-      pct = Math.max(0, Math.min(1, pct))
-      progressFill.style.width = (pct * 100) + '%'
-    })
-let hideProgressTimeout=null
-function showProgressBar(){ progress.classList.add('visible'); if (hideProgressTimeout) clearTimeout(hideProgressTimeout); hideProgressTimeout=setTimeout(()=>{ progress.classList.remove('visible') }, 1500); scheduleCursorHide() }
-    function seekAt(x){
-      const DBG = (typeof window !== 'undefined' && window.DEBUG_SEEK)
-      const r = progress.getBoundingClientRect()
-      const width = r.width || (r.right - r.left)
-      if (DBG) console.log('[seek] start', { x, left: r.left, width })
-      if (!Number.isFinite(width) || width <= 0) { if (DBG) console.log('[seek] invalid width'); showProgressBar(); return }
-      let pct = (x - r.left) / width
-      if (DBG) console.log('[seek] pctRaw', pct)
-      if (!Number.isFinite(pct)) { if (DBG) console.log('[seek] invalid pct'); showProgressBar(); return }
-      pct = Math.min(1, Math.max(0, pct))
-      const d = player.duration
-      let t = null
-      if (Number.isFinite(d) && d > 0){
-        t = pct * d
-        if (DBG) console.log('[seek] using duration', { pct, d, t })
-      } else if (player.seekable && player.seekable.length > 0){
-        try{
-          const i = player.seekable.length - 1
-          const start = player.seekable.start(i)
-          const end = player.seekable.end(i)
-          const span = end - start
-          if (Number.isFinite(span) && span > 0) { t = start + pct * span; if (DBG) console.log('[seek] using seekable', { start, end, span, pct, t }) }
-        }catch{}
-      } else if (player.buffered && player.buffered.length > 0){
-        try{
-          const start = player.buffered.start(0)
-          const end = player.buffered.end(player.buffered.length - 1)
-          const span = end - start
-          if (Number.isFinite(span) && span > 0) { t = start + pct * span; if (DBG) console.log('[seek] using buffered', { start, end, span, pct, t }) }
-        }catch{}
-      }
-      if (Number.isFinite(t)) {
-        const before = Number(player.currentTime) || 0
-        if (DBG) console.log('[seek] applying', { before, t })
-        const applyOnce = () => {
-          try { if (typeof hlsInstance === 'object' && hlsInstance && typeof hlsInstance.startLoad === 'function') { hlsInstance.startLoad(t) } } catch {}
-          try { player.currentTime = t } catch {}
-          try { if (typeof hlsInstance === 'object' && hlsInstance && hlsInstance.media) { hlsInstance.media.currentTime = t } } catch {}
-        }
-        applyOnce()
-        setTimeout(()=>{
-          const after = Number(player.currentTime) || 0
-          if (DBG) console.log('[seek] after', { after })
-          if (Math.abs(after - t) > 0.4){
-            if (DBG) console.log('[seek] retry pause->set->play')
-            try { player.pause(); player.currentTime = t; player.play().catch(()=>{}) } catch {}
-            setTimeout(()=>{
-              const after2 = Number(player.currentTime) || 0
-              if (DBG) console.log('[seek] after2', { after2 })
-              if (Math.abs(after2 - t) > 0.4){
-                if (DBG) console.log('[seek] final retry startLoad+set')
-                applyOnce()
-              }
-            }, 180)
-          }
-        }, 160)
-      } else {
-        if (DBG) console.log('[seek] no valid target')
-      }
-      showProgressBar()
-    }
-    // Listeners no formato original solicitado, com preventDefault/stopPropagation
-    progress.addEventListener('click', (e)=>{ try{ e.preventDefault(); e.stopPropagation(); }catch{} if (typeof window!=='undefined'&&window.DEBUG_SEEK) console.log('[seek] click handler', { clientX:e.clientX, offsetX:e.offsetX }); seekAt(e.clientX) }, { passive:false })
-    progress.addEventListener('mousedown', (e)=>{ try{ e.preventDefault(); e.stopPropagation(); }catch{} seekAt(e.clientX) }, { passive:false })
-    progress.addEventListener('touchstart', (e)=>{ try{ e.preventDefault(); e.stopPropagation(); }catch{} const t=e.touches&&e.touches[0]; if(t) seekAt(t.clientX) }, { passive:false })
 
-// ===== Cursor auto-hide (restaurado) =====
+function seekAt(e) {
+    const progressRect = progress.getBoundingClientRect()
+    const seekTime =
+        ((e.clientX - progressRect.left) / progressRect.width) *
+        player.duration
+    player.currentTime = seekTime
+}
+
+progress.addEventListener('click', seekAt)
+
+let hideProgressTimeout = null
+function showProgressBar() {
+    progress.classList.add('visible')
+    if (hideProgressTimeout) clearTimeout(hideProgressTimeout)
+    hideProgressTimeout = setTimeout(() => {
+        progress.classList.remove('visible')
+    }, 1500)
+    scheduleCursorHide()
+}
+
+// ===== Cursor auto-hide =====
 let cursorTimeout=null
 function scheduleCursorHide(){ document.body.classList.remove('hide-cursor'); if (cursorTimeout) clearTimeout(cursorTimeout); cursorTimeout=setTimeout(()=>{ document.body.classList.add('hide-cursor') }, 1500) }
 container.addEventListener('mousemove', ()=>{ showProgressBar(); scheduleCursorHide() }, { passive:true })
