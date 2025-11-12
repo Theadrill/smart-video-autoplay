@@ -519,6 +519,7 @@ function ensureLiveHLS(id) {
   let ffArgs = [];
   if (vUrl) {
     ffArgs = [
+      "-hide_banner", "-loglevel", "warning",
       "-y",
       "-i", vUrl,
       "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p",
@@ -535,6 +536,7 @@ function ensureLiveHLS(id) {
     ];
   } else {
     ffArgs = [
+      "-hide_banner", "-loglevel", "warning",
       "-y",
       "-i", directUrl || url,
       "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p",
@@ -587,6 +589,29 @@ async function waitForHlsReady(id, timeoutMs = 5000) {
     await new Promise(r => setTimeout(r, 150));
   }
   return false;
+}
+
+// Pequeno diagnóstico do HLS gerado (para saber se terá DVR)
+function hlsDiagnostics(id) {
+  try {
+    const folder = path.join(streamFolder, id);
+    const m3u8 = path.join(folder, `${id}.m3u8`);
+    if (!fs.existsSync(m3u8)) return null;
+    const txt = fs.readFileSync(m3u8, 'utf8');
+    const hasEnd = /#EXT-X-ENDLIST/i.test(txt);
+    const typeEvent = /#EXT-X-PLAYLIST-TYPE\s*:\s*EVENT/i.test(txt);
+    const segs = (txt.match(/#EXTINF:/g) || []).length;
+    let dur = 0;
+    try {
+      const lines = txt.split(/\r?\n/);
+      for (const ln of lines) {
+        const m = ln.match(/^#EXTINF:([0-9.]+)/);
+        if (m) dur += parseFloat(m[1] || '0') || 0;
+      }
+    } catch {}
+    const kind = hasEnd ? 'vod' : (typeEvent ? 'event-live' : 'live');
+    return { type: kind, hasEndlist: hasEnd, isEvent: typeEvent, segments: segs, approxWindowSec: Math.round(dur) };
+  } catch { return null; }
 }
 
 // ===================== CONCURRENCY AUTO (modo C) =====================
@@ -694,6 +719,7 @@ async function preloadNextVideo(chKey) {
       let ffArgs = [];
       if (vUrl) {
         ffArgs = [
+          "-hide_banner", "-loglevel", "warning",
           "-y",
           "-i", vUrl,
           "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p",
@@ -710,6 +736,7 @@ async function preloadNextVideo(chKey) {
         ];
       } else if (directUrl) {
         ffArgs = [
+          "-hide_banner", "-loglevel", "warning",
           "-y",
           "-i", directUrl,
           "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p",
@@ -777,6 +804,7 @@ app.get("/api/next", async (req, res) => {
     console.log(`🎞 Vídeo sorteado: ${escolhido.video}`);
     console.log(`📁 Arquivo: ${escolhido.arquivo}`);
 
+    console.log('[LOCAL] Tipo=VOD (arquivo local). Progress bar deve preencher.');
     return res.json({ file: escolhido.arquivo, title: escolhido.video });
   }
 
@@ -857,6 +885,15 @@ app.get("/api/next", async (req, res) => {
   await waitForHlsReady(chosen.id, 7000);
   console.log(`\n[YT] Canal: ${chKey}`);
   console.log(`[YT] Video: ${chosen.title}  (id=${chosen.id}, age=${chosen.ageDays}d)`);
+  try {
+    const diag = hlsDiagnostics(chosen.id);
+    if (diag) {
+      console.log(`[HLS] tipo=${diag.type} event=${diag.isEvent} endlist=${diag.hasEndlist} segmentos=${diag.segments} janela~${diag.approxWindowSec}s`);
+      if (diag.type === 'live' && !diag.isEvent) {
+        console.log('[HLS] Observação: playlist sem DVR (a barra de progresso pode permanecer cinza).');
+      }
+    }
+  } catch {}
   preloadNextVideo(chKey);
   return res.json({ hls: `/stream/${chosen.id}/${chosen.id}.m3u8`, id: chosen.id, title: chosen.title, channel: chKey });
 });

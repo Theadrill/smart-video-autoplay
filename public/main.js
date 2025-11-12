@@ -177,18 +177,108 @@ btnPlay?.addEventListener('click', ()=>{ const p=document.getElementById('player
 // ===== Progress bar (restaurado) =====
 const progress = document.getElementById('progress')
 const progressFill = progress.querySelector('.fill')
-player.addEventListener('timeupdate', ()=>{ if (!player.duration) return; progressFill.style.width = (player.currentTime/player.duration)*100 + '%' })
+    player.addEventListener('timeupdate', ()=>{
+      const ct = Number.isFinite(player.currentTime) ? player.currentTime : 0
+      let pct = null
+      const d = player.duration
+      if (Number.isFinite(d) && d > 0){
+        pct = ct / d
+      } else if (player.seekable && player.seekable.length > 0){
+        try{
+          const i = player.seekable.length - 1
+          const start = player.seekable.start(i)
+          const end = player.seekable.end(i)
+          const span = end - start
+          if (Number.isFinite(span) && span > 0){
+            const pos = Math.max(start, Math.min(end, ct))
+            pct = (pos - start) / span
+          }
+        }catch{}
+      } else if (player.buffered && player.buffered.length > 0){
+        try{
+          const i = player.buffered.length - 1
+          const end = player.buffered.end(i)
+          if (Number.isFinite(end) && end > 0) pct = Math.max(0, Math.min(1, ct / end))
+        }catch{}
+      }
+      if (pct == null || !Number.isFinite(pct)) return
+      pct = Math.max(0, Math.min(1, pct))
+      progressFill.style.width = (pct * 100) + '%'
+    })
 let hideProgressTimeout=null
 function showProgressBar(){ progress.classList.add('visible'); if (hideProgressTimeout) clearTimeout(hideProgressTimeout); hideProgressTimeout=setTimeout(()=>{ progress.classList.remove('visible') }, 1500); scheduleCursorHide() }
-function seekAt(x){ const r = progress.getBoundingClientRect(); const pct = (x - r.left)/r.width; if (player.duration) player.currentTime = pct*player.duration; showProgressBar() }
-progress.addEventListener('click', (e)=>seekAt(e.clientX), { passive:true })
-progress.addEventListener('touchstart', (e)=>seekAt(e.touches[0].clientX), { passive:true })
+    function seekAt(x){
+      const DBG = (typeof window !== 'undefined' && window.DEBUG_SEEK)
+      const r = progress.getBoundingClientRect()
+      const width = r.width || (r.right - r.left)
+      if (DBG) console.log('[seek] start', { x, left: r.left, width })
+      if (!Number.isFinite(width) || width <= 0) { if (DBG) console.log('[seek] invalid width'); showProgressBar(); return }
+      let pct = (x - r.left) / width
+      if (DBG) console.log('[seek] pctRaw', pct)
+      if (!Number.isFinite(pct)) { if (DBG) console.log('[seek] invalid pct'); showProgressBar(); return }
+      pct = Math.min(1, Math.max(0, pct))
+      const d = player.duration
+      let t = null
+      if (Number.isFinite(d) && d > 0){
+        t = pct * d
+        if (DBG) console.log('[seek] using duration', { pct, d, t })
+      } else if (player.seekable && player.seekable.length > 0){
+        try{
+          const i = player.seekable.length - 1
+          const start = player.seekable.start(i)
+          const end = player.seekable.end(i)
+          const span = end - start
+          if (Number.isFinite(span) && span > 0) { t = start + pct * span; if (DBG) console.log('[seek] using seekable', { start, end, span, pct, t }) }
+        }catch{}
+      } else if (player.buffered && player.buffered.length > 0){
+        try{
+          const start = player.buffered.start(0)
+          const end = player.buffered.end(player.buffered.length - 1)
+          const span = end - start
+          if (Number.isFinite(span) && span > 0) { t = start + pct * span; if (DBG) console.log('[seek] using buffered', { start, end, span, pct, t }) }
+        }catch{}
+      }
+      if (Number.isFinite(t)) {
+        const before = Number(player.currentTime) || 0
+        if (DBG) console.log('[seek] applying', { before, t })
+        const applyOnce = () => {
+          try { if (typeof hlsInstance === 'object' && hlsInstance && typeof hlsInstance.startLoad === 'function') { hlsInstance.startLoad(t) } } catch {}
+          try { player.currentTime = t } catch {}
+          try { if (typeof hlsInstance === 'object' && hlsInstance && hlsInstance.media) { hlsInstance.media.currentTime = t } } catch {}
+        }
+        applyOnce()
+        setTimeout(()=>{
+          const after = Number(player.currentTime) || 0
+          if (DBG) console.log('[seek] after', { after })
+          if (Math.abs(after - t) > 0.4){
+            if (DBG) console.log('[seek] retry pause->set->play')
+            try { player.pause(); player.currentTime = t; player.play().catch(()=>{}) } catch {}
+            setTimeout(()=>{
+              const after2 = Number(player.currentTime) || 0
+              if (DBG) console.log('[seek] after2', { after2 })
+              if (Math.abs(after2 - t) > 0.4){
+                if (DBG) console.log('[seek] final retry startLoad+set')
+                applyOnce()
+              }
+            }, 180)
+          }
+        }, 160)
+      } else {
+        if (DBG) console.log('[seek] no valid target')
+      }
+      showProgressBar()
+    }
+    // Listeners no formato original solicitado, com preventDefault/stopPropagation
+    progress.addEventListener('click', (e)=>{ try{ e.preventDefault(); e.stopPropagation(); }catch{} if (typeof window!=='undefined'&&window.DEBUG_SEEK) console.log('[seek] click handler', { clientX:e.clientX, offsetX:e.offsetX }); seekAt(e.clientX) }, { passive:false })
+    progress.addEventListener('mousedown', (e)=>{ try{ e.preventDefault(); e.stopPropagation(); }catch{} seekAt(e.clientX) }, { passive:false })
+    progress.addEventListener('touchstart', (e)=>{ try{ e.preventDefault(); e.stopPropagation(); }catch{} const t=e.touches&&e.touches[0]; if(t) seekAt(t.clientX) }, { passive:false })
 
 // ===== Cursor auto-hide (restaurado) =====
 let cursorTimeout=null
 function scheduleCursorHide(){ document.body.classList.remove('hide-cursor'); if (cursorTimeout) clearTimeout(cursorTimeout); cursorTimeout=setTimeout(()=>{ document.body.classList.add('hide-cursor') }, 1500) }
 container.addEventListener('mousemove', ()=>{ showProgressBar(); scheduleCursorHide() }, { passive:true })
-container.addEventListener('touchstart', ()=>{ showProgressBar(); scheduleCursorHide() }, { passive:true })
+    container.addEventListener('touchstart', ()=>{ showProgressBar(); scheduleCursorHide() }, { passive:true })
+    container.addEventListener('touchmove',  ()=>{ showProgressBar(); scheduleCursorHide() }, { passive:true })
 document.addEventListener('fullscreenchange', scheduleCursorHide)
 
 // previousVideo endpoint
