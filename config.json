@@ -1,5 +1,5 @@
 {
-    "downloadsPath": ["C:\\VIDEOS PARA TELÃO\\downloads", "E:\\VIDEOS PARA TELÃO\\downloads", "F:\\VIDEOS PARA TELÃO\\downloads"],
+    "downloadsPath": ["C:\\VIDEOS PARA TELÃO\\downloads", "D:\\VIDEOS PARA TELÃO\\downloads", "E:\\VIDEOS PARA TELÃO\\downloads", "F:\\VIDEOS PARA TELÃO\\downloads"],
     "selectedPath": "D:\\VIDEOS",
     "targetGB": 6.8,
     "generateRandomNames": true,
