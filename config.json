@@ -13,7 +13,7 @@
   "maxConcurrentConversions": 2,
   "urls": ["https://www.youtube.com/@nikesb"],
   "includeKeywords": ["Best of", "Highlights", "Top moments", "Series", "Top 3", "Top", "laliga", "resumen", "uefa", "gols", "soapbox"],
-  "excludeKeywords": ["Trailer", "Preview", "Podcast", "Invite", "PÊNALTIS", "crew", "full match", "serie c", "commentate"],
+  "excludeKeywords": ["Trailer", "Preview", "Podcast", "Invite", "PÊNALTIS", "crew", "full match", "serie c", "commentate", "u20"],
   "minDurationSeconds": 60,
   "ignoreShorts": false,
   "originalFolderForMergeSplit": "F:\\VIDEOS PARA TELÃO\\downloads",

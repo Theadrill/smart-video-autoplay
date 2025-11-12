@@ -2,7 +2,13 @@
   "playedChannelsThisRound": [
     "@nikesb",
     "@XGames",
-    "@monstertruckreels"
+    "@monstertruckreels",
+    "@FutebolNacional",
+    "@toprank",
+    "@wrc",
+    "@Juventus",
+    "@RedBullRally",
+    "@RedBullBike"
   ],
   "playedVideosByChannel": {
     "@XGames": [
@@ -10,9 +16,26 @@
     ],
     "@nikesb": [],
     "@RedBullSurfing": [],
-    "@FutebolNacional": [],
+    "@FutebolNacional": [
+      "jkXGa1DPEag"
+    ],
     "@monstertruckreels": [
       "SWCKbYesWJQ"
+    ],
+    "@toprank": [
+      "NKXy2o5cxpg"
+    ],
+    "@wrc": [
+      "i0zW6lhjs3c"
+    ],
+    "@Juventus": [
+      "9PYbDg-dZyM"
+    ],
+    "@RedBullRally": [
+      "S_rlDZMsPL0"
+    ],
+    "@RedBullBike": [
+      "9Rcf_uS8QTQ"
     ]
   }
 }
