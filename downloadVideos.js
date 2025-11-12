@@ -8,417 +8,253 @@ import readline from "readline"
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
-// prettier-ignore
-let URLS = [];
-let INCLUDE_KEYWORDS = []
-let EXCLUDE_KEYWORDS = []
-let MIN_DURATION = 180
-let IGNORE_SHORTS = true
+const VERBOSE = true
+const vlog = (...a) => VERBOSE && console.log(`[${new Date().toISOString()}]`, ...a)
+const verror = (...a) => console.error(`[${new Date().toISOString()}] ❌`, ...a)
 
-// ==========================================================
-// 📖 Leitura de config.json
-// ==========================================================
+// ===================== CONFIG =====================
 const configPath = path.resolve("config.json")
 if (!fs.existsSync(configPath)) {
-    console.error("❌ config.json não encontrado!")
+    verror("config.json não encontrado.")
     process.exit(1)
 }
 const config = JSON.parse(fs.readFileSync(configPath, "utf8"))
 
+let URLS = config.urls || []
+let INCLUDE_KEYWORDS = config.includeKeywords || []
+let EXCLUDE_KEYWORDS = config.excludeKeywords || []
+let MIN_DURATION = config.minDurationSeconds || 180
+let IGNORE_SHORTS = config.ignoreShorts ?? true
+
 const MAX_CONCURRENT_DOWNLOADS = config.maxConcurrentDownloads || 3
 const MAX_CONCURRENT_CONVERSIONS = config.maxConcurrentConversions || 2
 
-if (Array.isArray(config.urls)) URLS = config.urls
-if (Array.isArray(config.includeKeywords)) INCLUDE_KEYWORDS = config.includeKeywords
-if (Array.isArray(config.excludeKeywords)) EXCLUDE_KEYWORDS = config.excludeKeywords
-if (config.minDurationSeconds) MIN_DURATION = config.minDurationSeconds
-if (typeof config.ignoreShorts === "boolean") IGNORE_SHORTS = config.ignoreShorts
+const MINUTES_LESS_THAN = config.minutesLessThan ?? 12
+const PARTS_IF_LESS = config.partsIfLess ?? 2
+const PARTS_IF_MORE = config.partsIfMore ?? 3
+const MINUTES_MORE_THAN = config.minutesMoreThan ?? 35
+const BIG_VIDEO_PARTS = config.bigVideoParts ?? 4
 
+// ===================== DOWNLOADS PATH =====================
 function resolveDownloadsPath(raw) {
-    if (Array.isArray(raw) && raw.length > 0) {
+    if (Array.isArray(raw)) {
         for (const p of raw) {
             const abs = path.resolve(p)
-            if (fs.existsSync(abs)) return abs
+            if (abs.toUpperCase().includes("VIDEOS PARA TELÃO")) return abs
         }
-        const first = path.resolve(raw[0])
-        fs.mkdirSync(first, { recursive: true })
-        return first
+        return path.resolve(raw[0])
     }
-    return path.resolve(raw)
+    const abs = path.resolve(raw)
+    if (abs.toUpperCase().includes("VIDEOS PARA TELÃO")) return abs
+    return path.resolve("./downloads")
 }
 
-// ==========================================================
-// Blacklist
-// ==========================================================
-const blacklistPath = path.resolve("blacklist.json")
-let BLACKLIST_IDS = new Set()
-try {
-  if (fs.existsSync(blacklistPath)) {
-    const bl = JSON.parse(fs.readFileSync(blacklistPath, "utf8"))
-    if (Array.isArray(bl.videoIds)) BLACKLIST_IDS = new Set(bl.videoIds)
-  }
-} catch {}const downloadsPath = resolveDownloadsPath(config.downloadsPath)
-if (!fs.existsSync(downloadsPath)) fs.mkdirSync(downloadsPath, { recursive: true })
-
-// ==========================================================
-// 🧠 PROGRESSO DE RETOMADA
-// ==========================================================
-const progressFile = path.join(downloadsPath, "downloads-progress.json")
-
-let progress = { lastVideo: null, status: "completed" }
-try {
-    if (fs.existsSync(progressFile)) progress = JSON.parse(fs.readFileSync(progressFile, "utf8"))
-} catch {}
-
-function saveProgress() {
-    fs.writeFileSync(progressFile, JSON.stringify(progress, null, 2))
+let downloadsPath = resolveDownloadsPath(config.downloadsPath)
+if (!fs.existsSync(downloadsPath)) {
+    console.log(`📁 Criando pasta de downloads: ${downloadsPath}`)
+    fs.mkdirSync(downloadsPath, { recursive: true })
+} else {
+    vlog("Pasta verificada:", downloadsPath)
 }
-
-// Se último vídeo estava incompleto → limpar seus arquivos
-if (progress.status === "incomplete" && progress.lastVideo) {
-    console.log(`⚠️ Última execução foi interrompida durante: ${progress.lastVideo}`)
-    console.log("🧹 Limpando arquivos incompletos...")
-
-    for (const f of fs.readdirSync(downloadsPath)) {
-        if (f.includes(progress.lastVideo)) {
-            fs.unlinkSync(path.join(downloadsPath, f))
-            console.log(`  ❌ Removido: ${f}`)
-        }
-    }
-
-    progress.status = "completed"
-    saveProgress()
-    console.log("🔁 Ele será reprocessado do zero quando chegar na fila.\n")
-}
-
-// ==========================================================
-// Regras de divisão
-// ==========================================================
-const DEFAULT_FINAL = Number(config.defaultFinalVideoParts ?? 0)
-const MINUTES_LESS_THAN = Number(config.minutesLessThan ?? 12)
-const PARTS_IF_LESS = Number(config.partsIfLess ?? 2)
-const PARTS_IF_MORE = Number(config.partsIfMore ?? 3)
-const MINUTES_MORE_THAN = Number(config.minutesMoreThan ?? 35)
-const BIG_VIDEO_PARTS = Number(config.bigVideoParts ?? 4)
 
 const CACHE_FILE = path.join(downloadsPath, "videos_cache.json")
 
-// ==========================================================
-// Utils
-// ==========================================================
-function sanitizeFilename(name) {
-    return name
-        .replace(/[<>:"/\\|?*\x00-\x1F]/g, "")
-        .replace(/\s+/g, " ")
-        .trim()
+// ===================== LOGS =====================
+const logsDir = path.resolve("logs")
+if (!fs.existsSync(logsDir)) fs.mkdirSync(logsDir, { recursive: true })
+const ERROR_LOG = path.join(logsDir, "error.log")
+const DOWNLOAD_LOG = path.join(logsDir, "download.log")
+const CONVERSION_LOG = path.join(logsDir, "conversion.log")
+
+function logTo(file, text) {
+    fs.appendFileSync(file, `[${new Date().toISOString()}] ${text}\n`)
 }
 
-function fmtTime(sec) {
-    sec = Math.max(0, sec || 0)
-    const h = Math.floor(sec / 3600)
-    const m = Math.floor((sec % 3600) / 60)
-    const s = Math.floor(sec % 60)
-    const pad = (n) => String(n).padStart(2, "0")
-    return h > 0 ? `${pad(h)}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`
+// ===================== HUD =====================
+let HUD_INITIALIZED = false
+const HUD_OFFSET = 2
+function initHUD() {
+    if (HUD_INITIALIZED) return
+    HUD_INITIALIZED = true
+    console.log("\n".repeat(HUD_OFFSET + MAX_CONCURRENT_CONVERSIONS))
 }
-
-// Duração síncrona (para limpeza)
-function getDurationSync(filePath) {
-    try {
-        return Number(execSync(`ffprobe -v error -show_entries format=duration -of csv=p=0 "${filePath}"`).toString())
-    } catch {
-        return 0
-    }
-}
-
-// ==========================================================
-// 🧹 Limpeza GLOBAL de pendências antes de iniciar
-// ==========================================================
-
-// Extrai “base” do arquivo (antes de .orig.mp4 / .mp4 / “ parte X.mp4” etc.)
-function getBaseFromFilename(f) {
-    const partMatch = f.match(/(.+?)\s+parte\s+\d+\.mp4$/i)
-    if (partMatch) return partMatch[1]
-    return f
-        .replace(/\.orig\.mp4\.part.*$/i, "")
-        .replace(/\.orig\.mp4\.ytdl$/i, "")
-        .replace(/\.orig\.mp4\.temp$/i, "")
-        .replace(/\.orig\.mp4$/i, "")
-        .replace(/\.mp4\.part.*$/i, "")
-        .replace(/\.mp4$/i, "")
-        .trim()
-}
-
-function cleanupIncompleteVideos() {
-    console.log("\n🧹 Verificando arquivos incompletos...")
-
-    const files = fs.readdirSync(downloadsPath)
-    const groups = {}
-
-    for (const f of files) {
-        if (!f.toLowerCase().endsWith(".mp4") && !f.toLowerCase().includes(".mp4.part") && !f.toLowerCase().includes(".orig.mp4") && !/parte\s+\d+\.mp4$/i.test(f) && !f.toLowerCase().endsWith(".ytdl") && !f.toLowerCase().endsWith(".temp")) {
-            continue
-        }
-        const base = getBaseFromFilename(f)
-        if (!groups[base]) groups[base] = []
-        groups[base].push(f)
-    }
-
-    for (const base in groups) {
-        const group = groups[base]
-
-        const hasOrigPart = group.some((f) => f.toLowerCase().includes(".orig.mp4.part"))
-        const hasYtdl = group.some((f) => f.toLowerCase().endsWith(".ytdl"))
-        const hasTemp = group.some((f) => f.toLowerCase().endsWith(".temp"))
-        const hasOrig = group.some((f) => f.toLowerCase().endsWith(".orig.mp4"))
-        const hasFinalWhole = group.some((f) => f.toLowerCase().endsWith(".mp4") && !/parte\s+\d+\.mp4$/i.test(f) && !f.toLowerCase().endsWith(".orig.mp4"))
-        const hasParts = group.some((f) => /parte\s+\d+\.mp4$/i.test(f))
-        const hasFinalPartFragments = group.some((f) => f.toLowerCase().includes(".mp4.part"))
-
-        // 1) Download interrompido (part/ytdl/temp) → apaga tudo
-        if (hasOrigPart || hasYtdl || hasTemp) {
-            console.log(`🗑️ Removendo download parcial → ${base}`)
-            for (const f of group) fs.unlinkSync(path.join(downloadsPath, f))
-            continue
-        }
-
-        // 2) Orig completo sem conversão → OK (vai converter depois)
-        if (hasOrig && !hasFinalWhole && !hasParts) {
-            console.log(`🔁 Encontrado .orig pronto pra converter → ${base}`)
-            continue
-        }
-
-        // 3) Conversão final interrompida (mp4.part) → apaga e refaz
-        if (hasFinalPartFragments) {
-            console.log(`🗑️ Conversão parcial detectada (mp4.part) → ${base}`)
-            for (const f of group) fs.unlinkSync(path.join(downloadsPath, f))
-            continue
-        }
-
-        // 4) Final existe mas o esperado era split em N partes → apaga e refaz
-        if (hasFinalWhole && !hasParts) {
-            const finalFile = group.find((f) => f.toLowerCase().endsWith(".mp4") && !/parte\s+\d+\.mp4$/i.test(f) && !f.toLowerCase().endsWith(".orig.mp4"))
-            if (finalFile) {
-                const duration = getDurationSync(path.join(downloadsPath, finalFile))
-                const expected = decideFinalParts(duration)
-                if (expected > 1) {
-                    console.log(`🗑️ Final único detectado mas eram esperadas ${expected} partes → ${base}`)
-                    for (const f of group) fs.unlinkSync(path.join(downloadsPath, f))
-                    continue
-                }
-            }
-        }
-    }
-
-    console.log("✅ Limpeza concluída.\n")
-}
-
-cleanupIncompleteVideos()
-
-// ==========================================================
-// HUD (fixo no topo, com 2 linhas de respiro antes)
-// ==========================================================
-const HUD_OFFSET = 2 // <<<< Aqui você define quantas linhas quer antes da HUD
-let hudInitialized = false
-
-function initDisplay() {
-    if (hudInitialized) return
-    hudInitialized = true
-
-    // Linhas vazias antes da HUD (para evitar colar no topo)
-    for (let i = 0; i < HUD_OFFSET; i++) console.log("")
-
-    // Reserva as linhas para os slots
-    for (let i = 0; i < MAX_CONCURRENT_CONVERSIONS; i++) console.log("")
-}
-
-// Agora a função writeAt considera o offset
-function writeAt(slot, text) {
-    if (!hudInitialized) initDisplay()
-    process.stdout.write("\x1b7") // save cursor
-    readline.cursorTo(process.stdout, 0, slot + HUD_OFFSET) // aplica offset
+function HUD(slot, text) {
+    initHUD()
+    process.stdout.write("\x1b7")
+    readline.cursorTo(process.stdout, 0, HUD_OFFSET + slot)
     readline.clearLine(process.stdout, 0)
     process.stdout.write(text)
-    process.stdout.write("\x1b8") // restore cursor
+    process.stdout.write("\x1b8")
 }
 
-// ==========================================================
-// Barra de progresso
-// ==========================================================
-function runFfmpegWithProgress(args, totalSeconds, labelFn, slot = 0) {
-    return new Promise((resolve, reject) => {
-        const spinnerFrames = ["⠁", "⠂", "⠄", "⡀", "⢀", "⠠", "⠐", "⠈"]
-        let spinIndex = 0
-        let lastTime = 0
-        const startWall = Date.now()
-
-        const proc = spawn("ffmpeg", args, { stdio: ["ignore", "ignore", "pipe"] })
-
-        proc.stderr.on("data", (chunk) => {
-            const s = chunk.toString()
-            const match = s.match(/time=(\d{2}):(\d{2}):(\d{2})/)
-            if (!match) return
-
-            const hh = +match[1],
-                mm = +match[2],
-                ss = +match[3]
-            lastTime = hh * 3600 + mm * 60 + ss
-            const frac = Math.min(1, lastTime / totalSeconds)
-            const elapsed = (Date.now() - startWall) / 1000
-            const rate = lastTime > 0 ? lastTime / elapsed : 1
-            const rem = (totalSeconds - lastTime) / Math.max(rate, 0.01)
-
-            const bar = `[${"■".repeat(Math.round(frac * 20))}${"□".repeat(20 - Math.round(frac * 20))}]`
-            const pct = Math.round(frac * 100)
-            const spin = spinnerFrames[spinIndex++ % spinnerFrames.length]
-            const label = typeof labelFn === "function" ? labelFn(lastTime) : labelFn
-
-            writeAt(slot, `${spin} ${label} ${bar} ${pct}% (${fmtTime(lastTime)} / ${fmtTime(totalSeconds)}) ETA: ${fmtTime(rem)} ⚡ ${rate.toFixed(2)}x`)
-        })
-
-        proc.on("close", (code) => {
-            // limpa o slot
-            writeAt(slot, "")
-            if (code === 0) resolve()
-            else reject()
-        })
-    })
+// ===================== HELPERS =====================
+function sanitize(name) {
+    return name.replace(/[<>:"/\\|?*\x00-\x1F]/g, "").replace(/\s+/g, " ").trim()
 }
+function loadCache() { return fs.existsSync(CACHE_FILE) ? JSON.parse(fs.readFileSync(CACHE_FILE, "utf8")) : null }
+function saveCache(c) { fs.writeFileSync(CACHE_FILE, JSON.stringify(c, null, 2)) }
 
-// ==========================================================
-// ffprobe duração (assíncrono – usado no pipeline)
-// ==========================================================
-async function getDuration(filePath) {
+// ===================== GET CHANNEL NAME =====================
+async function getChannelName(url) {
     return new Promise((resolve) => {
-        const ffprobe = spawn("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", filePath])
-        let output = ""
-        ffprobe.stdout.on("data", (d) => (output += d.toString()))
-        ffprobe.on("close", () => resolve(parseFloat(output.trim()) || 0))
+        let u = url.replace("/@", "/")
+        if (!u.endsWith("/")) u += "/"
+        https.get(u, res => {
+            let d = ""
+            res.on("data", c => d += c)
+            res.on("end", () => {
+                const m = d.match(/<title>(.*?)<\/title>/i)
+                resolve(m ? m[1].replace("- YouTube", "").trim() : "Canal Desconhecido")
+            })
+        }).on("error", () => resolve("Canal Desconhecido"))
     })
 }
 
-// ==========================================================
-// Download
-// ==========================================================
-async function downloadVideo(video) {
-    const videoId = video.id
-    const title = sanitizeFilename(video.title)
-    const channel = sanitizeFilename(video.uploader)
-    const baseName = `${channel} - ${title} - ${videoId}`
-    const tempFile = path.join(downloadsPath, `${baseName}.orig.mp4`)
+// ===================== COLLECT VIDEOS =====================
+async function collectVideos() {
+    const cache = {}
+    for (const url of URLS) {
+        console.log(`\n🔍 Coletando vídeos de: ${url}`)
+        const channel = sanitize(await getChannelName(url))
+        const tmp = path.join(downloadsPath, "tmp_list.json")
+        execSync(`yt-dlp -j --flat-playlist "${url}" > "${tmp}" 2>&1`)
+        const entries = fs.readFileSync(tmp, "utf8").split("\n").filter(Boolean).map(l => JSON.parse(l))
+        fs.unlinkSync(tmp)
+        const inc = INCLUDE_KEYWORDS.map(k => k.toLowerCase())
+        const exc = EXCLUDE_KEYWORDS.map(k => k.toLowerCase())
+        const filtered = entries.filter(v => {
+            const t = (v.title || "").toLowerCase()
+            const includeOK = inc.length === 0 || inc.some(k => t.includes(k))
+            const excludeOK = exc.length === 0 || !exc.some(k => t.includes(k))
+            const isShort = IGNORE_SHORTS && (t.includes("shorts") || (v.duration && v.duration < 60))
+            return includeOK && excludeOK && !isShort
+        })
+        cache[url] = filtered.map(v => ({
+            id: v.id,
+            title: v.title,
+            uploader: channel
+        }))
+    }
+    saveCache(cache)
+    return cache
+}
 
-    // marcar progresso
-    progress.lastVideo = baseName
-    progress.status = "incomplete"
-    saveProgress()
+// ===================== DOWNLOAD VIDEO =====================
+async function getDuration(file) {
+    return new Promise(res => {
+        const p = spawn("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", file])
+        let out = ""
+        p.stdout.on("data", d => out += d)
+        p.on("close", () => res(parseFloat(out) || 0))
+    })
+}
 
-    console.log(`⬇️  Iniciando download: ${title}`)
-
-    return new Promise((resolve) => {
-        const proc = spawn("yt-dlp", [`https://www.youtube.com/watch?v=${videoId}`, "-f", "b[ext=mp4]", "-o", tempFile, "--no-overwrites"])
-
-        proc.on("close", async (code) => {
-            if (code !== 0) return resolve(null)
-            const duration = await getDuration(tempFile)
-            if (duration < MIN_DURATION) {
-                fs.unlinkSync(tempFile)
-                return resolve(null)
-            }
-            console.log(`✅ Download concluído: ${title}`)
-            resolve({ tempFile, baseName, duration })
+async function downloadVideo(v) {
+    const base = `${sanitize(v.uploader)} - ${sanitize(v.title)} - ${v.id}`
+    const temp = path.join(downloadsPath, `${base}.orig.mp4`)
+    console.log(`\n⬇️ Baixando: ${base}`)
+    const p = spawn("yt-dlp", [`https://www.youtube.com/watch?v=${v.id}`, "-f", "b[ext=mp4]", "-o", temp, "--newline", "--verbose"])
+    p.stdout.on('data', (data) => {
+        console.log(data.toString());
+    });
+    p.stderr.on('data', (data) => {
+        console.error(data.toString());
+    });
+    return new Promise(resolve => {
+        p.on("close", async () => {
+            if (!fs.existsSync(temp)) return resolve(null)
+            const dur = await getDuration(temp)
+            if (dur < MIN_DURATION) { fs.unlinkSync(temp); return resolve(null) }
+            resolve({ base, temp, dur })
         })
     })
 }
 
-// ==========================================================
-// Regras de divisão
-// ==========================================================
-function decideFinalParts(totalSeconds) {
-    if (DEFAULT_FINAL > 0) return DEFAULT_FINAL
-    const minutes = totalSeconds / 60
-    if (minutes >= MINUTES_MORE_THAN) return BIG_VIDEO_PARTS
-    if (minutes < MINUTES_LESS_THAN) return PARTS_IF_LESS
-    return PARTS_IF_MORE
+// ===================== SPLIT LOGIC =====================
+function decideParts(sec) {
+    const min = sec / 60
+    return min < MINUTES_LESS_THAN ? PARTS_IF_LESS
+         : min >= MINUTES_MORE_THAN ? BIG_VIDEO_PARTS
+         : PARTS_IF_MORE
 }
 
-// ==========================================================
-// Convert + Split
-// ==========================================================
-async function convertAndSplit(task) {
-    const { tempFile, baseName, duration, slot } = task
-    const finalFile = path.join(downloadsPath, `${baseName}.mp4`)
+async function convertAndSplit(job, slot) {
+    const { base, temp, dur } = job
+    const final = path.join(downloadsPath, `${base}.mp4`)
 
-    await runFfmpegWithProgress(["-y", "-i", tempFile, "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "30", "-vf", "scale='min(1280,iw)':-2", "-movflags", "+faststart", finalFile], duration, () => `🎞️ Convertendo ${baseName}`, slot)
+    // Convert
+    const c = spawn("ffmpeg", ["-y", "-i", temp, "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "30", final])
+    c.stderr.on("data", d => {
+        const m = d.toString().match(/time=(\d+):(\d+):(\d+)/)
+        if (m) HUD(slot, `🎞️ Convertendo ${base}`)
+    })
+    await new Promise(r => c.on("close", r))
 
-    const finalParts = decideFinalParts(duration)
+    const parts = decideParts(dur)
+    const seg = dur / parts
 
-    if (finalParts <= 1) {
-        if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile)
-        progress.status = "completed"
-        saveProgress()
-        return true
+    for (let i = 0; i < parts; i++) {
+        const out = path.join(downloadsPath, `${base} parte ${i+1}.mp4`)
+        const start = Math.floor(i * seg)
+        const len = i === parts-1 ? Math.ceil(dur-start) : Math.ceil(seg)
+        const s = spawn("ffmpeg", ["-y", "-ss", `${start}`, "-t", `${len}`, "-i", final, "-c", "copy", out])
+        s.stderr.on("data", d => HUD(slot, `✂️ Parte ${i+1}/${parts} — ${base}`))
+        await new Promise(r => s.on("close", r))
     }
 
-    const segment = duration / finalParts
-
-    for (let i = 0; i < finalParts; i++) {
-        const start = Math.floor(i * segment)
-        const dur = i === finalParts - 1 ? Math.ceil(duration - start) : Math.ceil(segment)
-        const out = path.join(downloadsPath, `${baseName} parte ${i + 1}.mp4`)
-
-        await runFfmpegWithProgress(["-y", "-ss", String(start), "-t", String(dur), "-i", finalFile, "-c", "copy", out], dur, () => `✂️ Parte ${i + 1}/${finalParts} — ${baseName}`, slot)
-    }
-
-    if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile)
-    if (fs.existsSync(finalFile)) fs.unlinkSync(finalFile)
-
-    progress.status = "completed"
-    saveProgress()
-    return true
+    fs.unlinkSync(temp)
+    fs.unlinkSync(final)
 }
 
-// ==========================================================
-// Execução principal
-// ==========================================================
+// ===================== EXEC =====================
 ;(async () => {
-    initDisplay() // reserva as linhas da HUD desde o início
+    console.log("\n🚀 Iniciando...")
 
-    const cache = JSON.parse(fs.readFileSync(CACHE_FILE, "utf8"))
-    const allVideos = Object.values(cache).flat().filter(v => !BLACKLIST_IDS.has(v.id))
+    // === CACHE AUTO-REBUILD ===
+    let cache = loadCache()
+    let rebuild = false
 
-    console.log(`📦 Total de vídeos na fila: ${allVideos.length}\n`)
+    if (!cache || Object.values(cache).flat().length === 0) rebuild = true
+    else {
+        const mp4 = fs.readdirSync(downloadsPath).filter(f => f.endsWith(".mp4"))
+        if (mp4.length < Object.values(cache).flat().length) rebuild = true
+    }
 
-    const downloadQueue = [...allVideos]
-    const conversionQueue = []
-    let concluidos = 0
+    if (rebuild) {
+        console.log("🔄 Recriando cache...")
+        cache = await collectVideos()
+        console.log("✅ Cache reconstruído.")
+    }
 
-    async function downloadWorker() {
-        while (downloadQueue.length > 0) {
+    const videos = Object.values(cache).flat()
+    console.log(`📦 Total de vídeos a baixar: ${videos.length}`)
+    if (videos.length === 0) return console.log("⚠️ Nada para baixar.")
+
+    const downloadQueue = [...videos]
+    const convertQueue = []
+    let done = 0
+
+    async function DownloadWorker() {
+        while (downloadQueue.length) {
             const v = downloadQueue.shift()
-            const r = await downloadVideo(v)
-            if (r) conversionQueue.push(r)
+            const res = await downloadVideo(v)
+            if (res) convertQueue.push(res)
         }
     }
 
-    async function conversionWorker(slot) {
-        while (true) {
-            const task = conversionQueue.shift()
-            if (!task) {
-                await new Promise((r) => setTimeout(r, 800))
-                if (downloadQueue.length === 0 && conversionQueue.length === 0) break
-                continue
-            }
-            task.slot = slot
-            const ok = await convertAndSplit(task)
-            if (ok) concluidos++
+    async function ConvertWorker(slot) {
+        while (downloadQueue.length || convertQueue.length) {
+            const job = convertQueue.shift()
+            if (!job) { await new Promise(r => setTimeout(r, 500)); continue }
+            await convertAndSplit(job, slot)
+            done++
         }
     }
 
-    const downloaders = Array.from({ length: MAX_CONCURRENT_DOWNLOADS }, downloadWorker)
-    const converters = Array.from({ length: MAX_CONCURRENT_CONVERSIONS }, (_, i) => conversionWorker(i))
+    await Promise.all([
+        ...Array.from({ length: MAX_CONCURRENT_DOWNLOADS }, DownloadWorker),
+        ...Array.from({ length: MAX_CONCURRENT_CONVERSIONS }, (_,i) => ConvertWorker(i))
+    ])
 
-    await Promise.all([...downloaders, ...converters])
-
-    console.log(`\n✅ Concluídos: ${concluidos}`)
+    console.log(`\n✅ Finalizado — ${done} vídeos processados.\n`)
 })()
-

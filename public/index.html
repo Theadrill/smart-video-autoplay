@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="pt-BR">
     <head>
         <meta charset="UTF-8" />
@@ -16,10 +16,25 @@
 
             <!-- Player de vídeo -->
             <video id="player" autoplay muted playsinline></video>
+            <!-- Controles (aparecem apenas em fullscreen) -->
+            <div id="controls" aria-hidden="true">
+                <button id="btn-prev" type="button" title="Anterior">⏮️</button>
+                <button id="btn-play" type="button" title="Play/Pause">⏯️</button>
+                <button id="btn-next" type="button" title="Próximo">⏭️</button>
+            </div>
 
             <!-- Barra de progresso -->
             <div id="progress">
                 <div class="fill"></div>
+            </div>
+
+            <!-- Loader / Buffering -->
+            <div id="loader" aria-live="polite" aria-busy="true">
+                <div class="spinner" aria-hidden="true"></div>
+                <div class="text">
+                    <div class="label">Carregando…</div>
+                    <div id="loader-title" class="title"></div>
+                </div>
             </div>
         </div>
 
@@ -29,6 +44,9 @@
 </div>
 
 
+        <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
         <script src="main.js"></script>
     </body>
 </html>
+
+
