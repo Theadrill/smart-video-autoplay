@@ -1,111 +1,53 @@
-[2025-11-10T06:49:13.348Z] [LOG] 
+[2025-11-12T02:28:18.657Z] [LOG] 
 📂 Pastas onde os vídeos serão buscados:
-[2025-11-10T06:49:13.351Z] [LOG]    → C:\VIDEOS PARA TELÃO\downloads
-[2025-11-10T06:49:13.351Z] [LOG]    → D:\VIDEOS PARA TELÃO\downloads
-[2025-11-10T06:49:13.352Z] [LOG]    → E:\VIDEOS PARA TELÃO\downloads
-[2025-11-10T06:49:13.352Z] [LOG]    → F:\VIDEOS PARA TELÃO\downloads
-[2025-11-10T06:49:13.352Z] [LOG] 🎬 MODO YOUTUBE ATIVO → Ignorando pastas locais.
+[2025-11-12T02:28:18.659Z] [LOG]    → C:\VIDEOS PARA TELÃO\downloads
+[2025-11-12T02:28:18.660Z] [LOG]    → D:\VIDEOS PARA TELÃO\downloads
+[2025-11-12T02:28:18.660Z] [LOG]    → E:\VIDEOS PARA TELÃO\downloads
+[2025-11-12T02:28:18.660Z] [LOG]    → F:\VIDEOS PARA TELÃO\downloads
+[2025-11-12T02:28:18.660Z] [LOG] 🎬 MODO YOUTUBE ATIVO → Ignorando pastas locais.
 
-[2025-11-10T06:49:13.353Z] [LOG] 🔄 Sincronizando database com arquivos atuais...
+[2025-11-12T02:28:18.660Z] [LOG] 🔄 Sincronizando database com arquivos atuais...
 
-[2025-11-10T06:49:13.447Z] [LOG] ✅ Blacklist carregada.
-[2025-11-10T06:49:13.448Z] [LOG] ✅ Estado da rodada (YouTube) carregado.
-[2025-11-10T06:49:13.535Z] [LOG] [STREAM] Limpeza inicial: 4 item(ns) removido(s).
-[2025-11-10T06:49:13.542Z] [LOG] 
+[2025-11-12T02:28:18.753Z] [LOG] ✅ Blacklist carregada.
+[2025-11-12T02:28:18.754Z] [LOG] ✅ Estado da rodada (YouTube) carregado.
+[2025-11-12T02:28:18.870Z] [LOG] [STREAM] Limpeza inicial: 9 item(ns) removido(s).
+[2025-11-12T02:28:18.877Z] [LOG] 
 ✅ Servidor rodando: http://localhost:3000
 
-[2025-11-10T06:49:20.322Z] [LOG] [SCRAPER] Aviso: 'gridVideoRenderer' não encontrado (usando ytInitialData)
-[2025-11-10T06:49:20.340Z] [LOG] [STREAM] Nenhum pipeline ativo para encerrar.
-[2025-11-10T06:49:20.341Z] [LOG] [YT] Indo para o próximo vídeo (id=d9AfzQK1rs8). Encerrados: ffmpeg=0, yt-dlp=0
-[2025-11-10T06:49:33.153Z] [LOG] [STREAM] ffmpeg iniciado para id=d9AfzQK1rs8 (pid=14360)
-[2025-11-10T06:49:40.138Z] [LOG] 
+[2025-11-12T02:28:21.197Z] [LOG] [SCRAPER] Aviso: 'gridVideoRenderer' não encontrado (usando ytInitialData)
+[2025-11-12T02:28:21.208Z] [LOG] [STREAM] Nenhum pipeline ativo para encerrar.
+[2025-11-12T02:28:21.208Z] [LOG] [YT] Indo para o próximo vídeo (id=4gpTco1KyMA). Encerrados: ffmpeg=0, yt-dlp=0
+[2025-11-12T02:28:25.983Z] [LOG] [STREAM] ffmpeg iniciado para id=4gpTco1KyMA (pid=15148)
+[2025-11-12T02:28:27.085Z] [LOG] 
+[YT] Canal: @nikesb
+[2025-11-12T02:28:27.086Z] [LOG] [YT] Video: Nike SB | Best of 2024  (id=4gpTco1KyMA, age=9999d)
+[2025-11-12T02:28:27.087Z] [LOG] 🗃️ (SCRAPE CACHE) Reutilizando lista do canal: https://www.youtube.com/@nikesb
+[2025-11-12T02:28:27.093Z] [LOG] ✅ (PRELOAD) Já existe HLS para: 4gpTco1KyMA
+[2025-11-12T02:28:27.099Z] [LOG] 🗃️ (SCRAPE CACHE) Reutilizando lista do canal: https://www.youtube.com/@nikesb
+[2025-11-12T02:28:27.631Z] [LOG] [SCRAPER] Aviso: 'gridVideoRenderer' não encontrado (usando ytInitialData)
+[2025-11-12T02:28:27.648Z] [LOG] [STREAM] Parando ffmpeg do id=4gpTco1KyMA (pid=15148)
+[2025-11-12T02:28:27.649Z] [LOG] [STREAM] Pipelines encerrados: ffmpeg=1, yt-dlp=0
+[2025-11-12T02:28:27.649Z] [LOG] [YT] Indo para o próximo vídeo (id=HT5RGHbaLKo). Encerrados: ffmpeg=1, yt-dlp=0
+[2025-11-12T02:28:32.681Z] [LOG] [STREAM] ffmpeg iniciado para id=HT5RGHbaLKo (pid=6224)
+[2025-11-12T02:28:35.344Z] [LOG] 
 [YT] Canal: @XGames
-[2025-11-10T06:49:40.139Z] [LOG] [YT] Video: BEST OF Women’s Skateboard Vert | X Games Osaka 2025  (id=d9AfzQK1rs8, age=30d)
-[2025-11-10T06:49:42.481Z] [LOG] [SCRAPER] Aviso: 'gridVideoRenderer' não encontrado (usando ytInitialData)
-[2025-11-10T06:49:43.488Z] [LOG] [SCRAPER] Aviso: 'gridVideoRenderer' não encontrado (usando ytInitialData)
-[2025-11-10T06:49:43.499Z] [LOG] ⏳ (PRELOAD) Gerando HLS do próximo vídeo: AlsJOYxHtoo
-[2025-11-10T06:49:55.725Z] [LOG] ⚠️ (PRELOAD) Falha ao gerar HLS para AlsJOYxHtoo: Command failed: ffmpeg -y -i https://rr1---sn-8p8v-bg0l.googlevideo.com/videoplayback?expire=1762778987&ei=C4sRaevqIa-Q-LAPm-za2Q0&ip=187.11.244.113&id=o-AKdIokAppGo-YugOwW2gZ39gaqAwxoOgGhhgxcxA0fbr&itag=136&aitags=133%2C134%2C135%2C136%2C137%2C160%2C242%2C243%2C244%2C247%2C248%2C278&source=youtube&requiressl=yes&xpc=EgVo2aDSNQ%3D%3D&met=1762757387%2C&mh=e9&mm=31%2C29&mn=sn-8p8v-bg0l%2Csn-bg0e6ne6&ms=au%2Crdu&mv=m&mvi=1&pl=24&rms=au%2Cau&ctier=A&pfa=5&initcwndbps=957500&hightc=yes&siu=1&bui=AdEuB5RHgIDkYVt1yR3wx8bkLb1Cs-XLnjvwcgk_SnMtYelByrh4Spd4lXr3Xf89gV9BaMwgAQ&vprv=1&svpuc=1&mime=video%2Fmp4&ns=7ItxYk_Il1qpuDWSVVmd_4EQ&rqh=1&gir=yes&clen=69730443&dur=261.160&lmt=1753463529372149&mt=1762757110&fvip=2&keepalive=yes&lmw=1&fexp=51557447%2C51565116%2C51565682%2C51580970&c=TVHTML5&sefc=1&txp=6309224&n=4PTg17GtgWvL6Q&sparams=expire%2Cei%2Cip%2Cid%2Caitags%2Csource%2Crequiressl%2Cxpc%2Cctier%2Cpfa%2Chightc%2Csiu%2Cbui%2Cvprv%2Csvpuc%2Cmime%2Cns%2Crqh%2Cgir%2Cclen%2Cdur%2Clmt&sig=AJfQdSswRQIgTeegFABzYHGpqaeEEEywHWq_SaKS5kFXn42HHh1NXnICIQChAOy1Lp7t1Fmy1pyAFn17ZSwi1Pkq3a-gIignRTJl8w%3D%3D&lsparams=met%2Cmh%2Cmm%2Cmn%2Cms%2Cmv%2Cmvi%2Cpl%2Crms%2Cinitcwndbps&lsig=APaTxxMwRQIhALVPTdYWJKElB63Jl0utqDCD3pGiqVIhTs6BlSs2NMxcAiAchSOiLZxqqkwS0xW7tr4O42uFInwRD4R8WQarddRebA%3D%3D -c:v libx264 -preset veryfast -crf 23 -pix_fmt yuv420p -profile:v main -force_key_frames expr:gte(t,n_forced*6) -an -start_number 0 -hls_time 6 -hls_list_size 0 -hls_playlist_type event -hls_flags independent_segments+append_list -hls_segment_filename C:\PROJETOS\smart-video-autoplay\stream\AlsJOYxHtoo\AlsJOYxHtoo_%03d.ts C:\PROJETOS\smart-video-autoplay\stream\AlsJOYxHtoo\AlsJOYxHtoo.m3u8
-[2025-11-10T06:49:55.747Z] [LOG] ⏳ Não há vídeo anterior.
-[2025-11-10T06:49:56.387Z] [LOG] [SCRAPER] Aviso: 'gridVideoRenderer' não encontrado (usando ytInitialData)
-[2025-11-10T06:49:57.916Z] [LOG] [SCRAPER] Aviso: 'gridVideoRenderer' não encontrado (usando ytInitialData)
-[2025-11-10T06:49:57.954Z] [LOG] [STREAM] Parando ffmpeg do id=d9AfzQK1rs8 (pid=14360)
-[2025-11-10T06:49:57.956Z] [LOG] [STREAM] Pipelines encerrados: ffmpeg=1, yt-dlp=0
-[2025-11-10T06:49:57.956Z] [LOG] [YT] Indo para o próximo vídeo (id=4gpTco1KyMA). Encerrados: ffmpeg=1, yt-dlp=0
-[2025-11-10T06:50:06.602Z] [LOG] [STREAM] ffmpeg iniciado para id=4gpTco1KyMA (pid=6080)
-[2025-11-10T06:50:06.612Z] [LOG] ⏳ Não há vídeo anterior.
-[2025-11-10T06:50:06.613Z] [LOG] ⏳ Não há vídeo anterior.
-[2025-11-10T06:50:08.302Z] [LOG] [SCRAPER] Aviso: 'gridVideoRenderer' não encontrado (usando ytInitialData)
-[2025-11-10T06:50:08.334Z] [LOG] [STREAM] Parando ffmpeg do id=4gpTco1KyMA (pid=6080)
-[2025-11-10T06:50:08.337Z] [LOG] [STREAM] Pipelines encerrados: ffmpeg=1, yt-dlp=0
-[2025-11-10T06:50:08.337Z] [LOG] [YT] Indo para o próximo vídeo (id=AlsJOYxHtoo). Encerrados: ffmpeg=1, yt-dlp=0
-[2025-11-10T06:50:16.334Z] [LOG] [STREAM] ffmpeg iniciado para id=AlsJOYxHtoo (pid=13776)
-[2025-11-10T06:50:16.335Z] [LOG] 
-[YT] Canal: @nikesb
-[2025-11-10T06:50:16.335Z] [LOG] [YT] Video: Nike SB | Best of 2024  (id=4gpTco1KyMA, age=9999d)
-[2025-11-10T06:50:16.341Z] [LOG] 🗃️ (SCRAPE CACHE) Reutilizando lista do canal: https://www.youtube.com/@XGames
-[2025-11-10T06:50:16.342Z] [LOG] [STREAM] Parando ffmpeg do id=AlsJOYxHtoo (pid=13776)
-[2025-11-10T06:50:16.345Z] [LOG] [STREAM] Pipelines encerrados: ffmpeg=1, yt-dlp=0
-[2025-11-10T06:50:16.345Z] [LOG] [YT] Indo para o próximo vídeo (id=21THwq9I0tc). Encerrados: ffmpeg=1, yt-dlp=0
-[2025-11-10T06:50:24.063Z] [LOG] [STREAM] ffmpeg iniciado para id=21THwq9I0tc (pid=5136)
-[2025-11-10T06:50:24.063Z] [LOG] 
+[2025-11-12T02:28:35.346Z] [LOG] [YT] Video: Top Moments from X Games Salt Lake City 2025 | X Games  (id=HT5RGHbaLKo, age=9999d)
+[2025-11-12T02:28:35.347Z] [LOG] 🗃️ (SCRAPE CACHE) Reutilizando lista do canal: https://www.youtube.com/@XGames
+[2025-11-12T02:28:35.350Z] [LOG] ⏳ (PRELOAD) Gerando HLS do próximo vídeo: 10YP4JWm5XU
+[2025-11-12T02:28:41.056Z] [LOG] ⚠️ (PRELOAD) Falha ao gerar HLS para 10YP4JWm5XU: Command failed: ffmpeg -y -i https://rr4---sn-8p8v-bg0ee.googlevideo.com/videoplayback?expire=1762936119&ei=1_ATaeSEKsmU-LAPgMT1kQc&ip=189.46.72.242&id=o-APEBuwWcPCgCvUfRKCJ8WSMV7NTkBKb3yvvpVAWpsGts&itag=398&aitags=133%2C134%2C135%2C136%2C137%2C160%2C242%2C243%2C244%2C247%2C248%2C278%2C356%2C394%2C395%2C396%2C397%2C398%2C399%2C721&source=youtube&requiressl=yes&xpc=EgVo2aDSNQ%3D%3D&cps=16&met=1762914519%2C&mh=lD&mm=31%2C29&mn=sn-8p8v-bg0ee%2Csn-8p8v-bg0sr&ms=au%2Crdu&mv=m&mvi=4&pl=24&rms=au%2Cau&ctier=A&pfa=5&initcwndbps=1916250&hightc=yes&siu=1&bui=AdEuB5TcixSvvC49u_TF7dbbQpYxWF-urYZP_5jAlF0I3j5Z2l90ZPI9XE0DiMLmr26gLSYdAg&vprv=1&svpuc=1&mime=video%2Fmp4&ns=TksMAM4gSgYM5WXU38IXJRwQ&rqh=1&gir=yes&clen=64738497&dur=505.438&lmt=1756435041459698&mt=1762914313&fvip=2&keepalive=yes&lmw=1&fexp=51557447%2C51565116%2C51565682%2C51580970&c=TVHTML5&sefc=1&txp=5537534&n=8hPVahg6ozN0VQ&sparams=expire%2Cei%2Cip%2Cid%2Caitags%2Csource%2Crequiressl%2Cxpc%2Cctier%2Cpfa%2Chightc%2Csiu%2Cbui%2Cvprv%2Csvpuc%2Cmime%2Cns%2Crqh%2Cgir%2Cclen%2Cdur%2Clmt&sig=AJfQdSswRgIhAOMINGVR84B4P_AvMF_8QgeNQy7K1iSUT_pPaKvMIu2vAiEA684PR5GY-5SOnmeSCiRhIwmd3W3M21wIlL-uNUj3cIM%3D&lsparams=cps%2Cmet%2Cmh%2Cmm%2Cmn%2Cms%2Cmv%2Cmvi%2Cpl%2Crms%2Cinitcwndbps&lsig=APaTxxMwRQIhAIGINKvqLmExuzRDjKwEAIKK91rG--Xk2glaL-8-y6rBAiA07vTeny28v0-JDvq1xba-8dJiNQZLVDlNcJ4PUK6BxQ%3D%3D -c:v libx264 -preset veryfast -crf 23 -pix_fmt yuv420p -profile:v main -force_key_frames expr:gte(t,n_forced*6) -an -start_number 0 -hls_time 6 -hls_list_size 0 -hls_playlist_type event -hls_flags independent_segments+append_list -hls_segment_filename C:\PROJETOS\smart-video-autoplay\stream\10YP4JWm5XU\10YP4JWm5XU_%03d.ts C:\PROJETOS\smart-video-autoplay\stream\10YP4JWm5XU\10YP4JWm5XU.m3u8
+[2025-11-12T02:28:41.058Z] [LOG] [STREAM] Parando ffmpeg do id=HT5RGHbaLKo (pid=6224)
+[2025-11-12T02:28:41.348Z] [LOG] [SCRAPER] Aviso: 'gridVideoRenderer' não encontrado (usando ytInitialData)
+[2025-11-12T02:28:41.367Z] [LOG] 🗃️ (SCRAPE CACHE) Reutilizando lista do canal: https://www.youtube.com/@XGames
+[2025-11-12T02:28:59.593Z] [LOG] [SCRAPER] Aviso: 'gridVideoRenderer' não encontrado (usando ytInitialData)
+[2025-11-12T02:28:59.601Z] [LOG] [STREAM] Nenhum pipeline ativo para encerrar.
+[2025-11-12T02:28:59.601Z] [LOG] [YT] Indo para o próximo vídeo (id=10YP4JWm5XU). Encerrados: ffmpeg=0, yt-dlp=0
+[2025-11-12T02:29:04.834Z] [LOG] [STREAM] ffmpeg iniciado para id=10YP4JWm5XU (pid=16580)
+[2025-11-12T02:29:05.774Z] [LOG] 
 [YT] Canal: @XGames
-[2025-11-10T06:50:24.063Z] [LOG] [YT] Video: BEST OF Monster Energy Men’s Skateboard Street Best Trick | X Games Salt Lake City 2025  (id=AlsJOYxHtoo, age=30d)
-[2025-11-10T06:50:24.262Z] [LOG] [SCRAPER] Aviso: 'gridVideoRenderer' não encontrado (usando ytInitialData)
-[2025-11-10T06:50:24.269Z] [LOG] ⏳ (PRELOAD) Gerando HLS do próximo vídeo: 4gpTco1KyMA
-[2025-11-10T06:50:37.285Z] [LOG] ⚠️ (PRELOAD) Falha ao gerar HLS para 4gpTco1KyMA: Command failed: ffmpeg -y -i https://rr4---sn-8p8v-bg0er.googlevideo.com/videoplayback?expire=1762779029&ei=NYsRaYjRHfik-LAP3N3T4Q0&ip=187.11.244.113&id=o-AEdlBF8AgTNOpejPsRdUaI5VwJqbTywZ_mecSEwR9kPo&itag=398&aitags=133%2C134%2C135%2C136%2C137%2C160%2C242%2C243%2C244%2C247%2C248%2C278%2C356%2C394%2C395%2C396%2C397%2C398%2C399%2C721&source=youtube&requiressl=yes&xpc=EgVo2aDSNQ%3D%3D&met=1762757429%2C&mh=oK&mm=31%2C29&mn=sn-8p8v-bg0er%2Csn-bg0e6nez&ms=au%2Crdu&mv=m&mvi=4&pcm2cms=yes&pl=24&rms=au%2Cau&ctier=A&pfa=5&initcwndbps=996250&hightc=yes&siu=1&bui=AdEuB5QN8JKJ7ooT7-TExDFjCgzgKZh0SgUexb6qWIWI4mf2qj4uHqUZ-nvhwafL9SQBXNav2g&vprv=1&svpuc=1&mime=video%2Fmp4&ns=jE2vddI4xsO8XfaizYNr0LEQ&rqh=1&gir=yes&clen=87190842&dur=654.387&lmt=1746369885372619&mt=1762757110&fvip=4&keepalive=yes&lmw=1&fexp=51557447%2C51565116%2C51565682%2C51580970&c=TVHTML5&sefc=1&txp=5537534&n=XXYx4na7UrpCSw&sparams=expire%2Cei%2Cip%2Cid%2Caitags%2Csource%2Crequiressl%2Cxpc%2Cctier%2Cpfa%2Chightc%2Csiu%2Cbui%2Cvprv%2Csvpuc%2Cmime%2Cns%2Crqh%2Cgir%2Cclen%2Cdur%2Clmt&sig=AJfQdSswRgIhAJWVsQkb4ZLk2GR5IQKsZN4tw4dwtkh9FJBxo2iQIReWAiEA6yAxceONTVd9xRAmhUVTo6OF1wAgOG09R7nRJJXNMfY%3D&lsparams=met%2Cmh%2Cmm%2Cmn%2Cms%2Cmv%2Cmvi%2Cpcm2cms%2Cpl%2Crms%2Cinitcwndbps&lsig=APaTxxMwRAIgSFhDDkfOEIyO2W5YdSGEk83bNVjQY8VtSKg_fpPJ0G4CID6foyrUlLgytYd3RDOsyfpu7Wj5E_d5SrvhD2mLbexw -c:v libx264 -preset veryfast -crf 23 -pix_fmt yuv420p -profile:v main -force_key_frames expr:gte(t,n_forced*6) -an -start_number 0 -hls_time 6 -hls_list_size 0 -hls_playlist_type event -hls_flags independent_segments+append_list -hls_segment_filename C:\PROJETOS\smart-video-autoplay\stream\4gpTco1KyMA\4gpTco1KyMA_%03d.ts C:\PROJETOS\smart-video-autoplay\stream\4gpTco1KyMA\4gpTco1KyMA.m3u8
-[2025-11-10T06:50:37.286Z] [LOG] 
-[YT] Canal: @XGames
-[2025-11-10T06:50:37.286Z] [LOG] [YT] Video: Best of Moto X from X Games Salt Lake City 2025 | X Games  (id=21THwq9I0tc, age=30d)
-[2025-11-10T06:50:38.557Z] [LOG] [SCRAPER] Aviso: 'gridVideoRenderer' não encontrado (usando ytInitialData)
-[2025-11-10T06:50:39.028Z] [LOG] [SCRAPER] Aviso: 'gridVideoRenderer' não encontrado (usando ytInitialData)
-[2025-11-10T06:50:39.034Z] [LOG] [STREAM] Parando ffmpeg do id=21THwq9I0tc (pid=5136)
-[2025-11-10T06:50:39.034Z] [LOG] [STREAM] Pipelines encerrados: ffmpeg=1, yt-dlp=0
-[2025-11-10T06:50:39.035Z] [LOG] [YT] Indo para o próximo vídeo (id=4gpTco1KyMA). Encerrados: ffmpeg=1, yt-dlp=0
-[2025-11-10T06:50:46.550Z] [LOG] [STREAM] ffmpeg iniciado para id=4gpTco1KyMA (pid=13000)
-[2025-11-10T06:50:46.568Z] [LOG] [SCRAPER] Aviso: 'gridVideoRenderer' não encontrado (usando ytInitialData)
-[2025-11-10T06:50:46.592Z] [LOG] [SCRAPER] Aviso: 'gridVideoRenderer' não encontrado (usando ytInitialData)
-[2025-11-10T06:50:46.605Z] [LOG] [SCRAPER] Aviso: 'gridVideoRenderer' não encontrado (usando ytInitialData)
-[2025-11-10T06:50:46.612Z] [LOG] ⏳ (PRELOAD) Gerando HLS do próximo vídeo: MEgJcaP-IrU
-[2025-11-10T06:50:58.254Z] [LOG] ⚠️ (PRELOAD) Falha ao gerar HLS para MEgJcaP-IrU: Command failed: ffmpeg -y -i https://rr3---sn-8p8v-bg0er.googlevideo.com/videoplayback?expire=1762779051&ei=S4sRaf-RAoSR-LAP0NDemAY&ip=187.11.244.113&id=o-AEo4QsQZUbYAHj27OI4Q_AInkt4P-7X-tmLXh8oUc7KE&itag=136&aitags=133%2C134%2C135%2C136%2C137%2C160%2C242%2C243%2C244%2C247%2C248%2C278&source=youtube&requiressl=yes&xpc=EgVo2aDSNQ%3D%3D&met=1762757451%2C&mh=9j&mm=31%2C29&mn=sn-8p8v-bg0er%2Csn-bg0e6nle&ms=au%2Crdu&mv=m&mvi=3&pl=24&rms=au%2Cau&ctier=A&pfa=5&initcwndbps=996250&hightc=yes&siu=1&bui=AdEuB5RCeixpMYliEEms_YNEJ-OyBV7YKIFloNB_zlGGO-PriBHKH3B92Y98a4zqsIalH0hfiQ&vprv=1&svpuc=1&mime=video%2Fmp4&ns=9TI8ghrVs4bhzRC7hF9iWpoQ&rqh=1&gir=yes&clen=72659276&dur=277.443&lmt=1753463411162904&mt=1762757110&fvip=3&keepalive=yes&lmw=1&fexp=51557447%2C51565116%2C51565682%2C51580970&c=TVHTML5&sefc=1&txp=6309224&n=OgOoB_WqdTsbzg&sparams=expire%2Cei%2Cip%2Cid%2Caitags%2Csource%2Crequiressl%2Cxpc%2Cctier%2Cpfa%2Chightc%2Csiu%2Cbui%2Cvprv%2Csvpuc%2Cmime%2Cns%2Crqh%2Cgir%2Cclen%2Cdur%2Clmt&sig=AJfQdSswRgIhAN5zGvKjgFk0jlfepcpTZGYlN7AuleU91Q1bC_5nLUh5AiEAs5TwnpxIoltssqvYXzhYbe29J1dhR80XHZDs1ohhwoo%3D&lsparams=met%2Cmh%2Cmm%2Cmn%2Cms%2Cmv%2Cmvi%2Cpl%2Crms%2Cinitcwndbps&lsig=APaTxxMwRgIhAK36VRvEc3MZAjTvX4exFpNVEiIChI6oX3edSgEfVXshAiEAzkk3A64PtnXzyyCnCGZdnvZigsIwBrmd4sfTPd8ehnc%3D -c:v libx264 -preset veryfast -crf 23 -pix_fmt yuv420p -profile:v main -force_key_frames expr:gte(t,n_forced*6) -an -start_number 0 -hls_time 6 -hls_list_size 0 -hls_playlist_type event -hls_flags independent_segments+append_list -hls_segment_filename C:\PROJETOS\smart-video-autoplay\stream\MEgJcaP-IrU\MEgJcaP-IrU_%03d.ts C:\PROJETOS\smart-video-autoplay\stream\MEgJcaP-IrU\MEgJcaP-IrU.m3u8
-[2025-11-10T06:50:58.255Z] [LOG] 
-[YT] Canal: @nikesb
-[2025-11-10T06:50:58.255Z] [LOG] [YT] Video: Nike SB | Best of 2024  (id=4gpTco1KyMA, age=9999d)
-[2025-11-10T06:51:00.876Z] [LOG] [SCRAPER] Aviso: 'gridVideoRenderer' não encontrado (usando ytInitialData)
-[2025-11-10T06:51:00.884Z] [LOG] ⚠️ [YT] Nenhum vídeo disponível após filtros → Resetando canal @nikesb
-[2025-11-10T06:51:00.885Z] [LOG] [STREAM] Nenhum pipeline ativo para encerrar.
-[2025-11-10T06:51:00.885Z] [LOG] [YT] Indo para o próximo vídeo (id=4gpTco1KyMA). Encerrados: ffmpeg=0, yt-dlp=0
-[2025-11-10T06:51:00.886Z] [LOG] 
-[YT] Canal: @nikesb
-[2025-11-10T06:51:00.886Z] [LOG] [YT] Video: Nike SB | Best of 2024  (id=4gpTco1KyMA, age=9999d)
-[2025-11-10T06:51:00.893Z] [LOG] 🗃️ (SCRAPE CACHE) Reutilizando lista do canal: https://www.youtube.com/@nikesb
-[2025-11-10T06:51:01.645Z] [LOG] [SCRAPER] Aviso: 'gridVideoRenderer' não encontrado (usando ytInitialData)
-[2025-11-10T06:51:01.774Z] [LOG] [SCRAPER] Aviso: 'gridVideoRenderer' não encontrado (usando ytInitialData)
-[2025-11-10T06:51:01.822Z] [LOG] [SCRAPER] Aviso: 'gridVideoRenderer' não encontrado (usando ytInitialData)
-[2025-11-10T06:51:01.853Z] [LOG] ✅ (PRELOAD) Já existe HLS para: 4gpTco1KyMA
-[2025-11-10T06:51:04.757Z] [LOG] 🗃️ (SCRAPE CACHE) Reutilizando lista do canal: https://www.youtube.com/@nikesb
-[2025-11-10T06:51:04.765Z] [LOG] [STREAM] Nenhum pipeline ativo para encerrar.
-[2025-11-10T06:51:04.814Z] [LOG] [YT] Indo para o próximo vídeo (id=4gpTco1KyMA). Encerrados: ffmpeg=0, yt-dlp=0
-[2025-11-10T06:51:04.824Z] [LOG] 
-[YT] Canal: @nikesb
-[2025-11-10T06:51:04.855Z] [LOG] [YT] Video: Nike SB | Best of 2024  (id=4gpTco1KyMA, age=9999d)
-[2025-11-10T06:51:04.950Z] [LOG] 🗃️ (SCRAPE CACHE) Reutilizando lista do canal: https://www.youtube.com/@nikesb
-[2025-11-10T06:51:04.990Z] [LOG] ✅ (PRELOAD) Já existe HLS para: 4gpTco1KyMA
-[2025-11-10T06:51:05.003Z] [LOG] 🗃️ (SCRAPE CACHE) Reutilizando lista do canal: https://www.youtube.com/@nikesb
-[2025-11-10T06:51:07.471Z] [LOG] 🗃️ (SCRAPE CACHE) Reutilizando lista do canal: https://www.youtube.com/@nikesb
-[2025-11-10T06:51:07.502Z] [LOG] [STREAM] Nenhum pipeline ativo para encerrar.
-[2025-11-10T06:51:07.518Z] [LOG] [YT] Indo para o próximo vídeo (id=4gpTco1KyMA). Encerrados: ffmpeg=0, yt-dlp=0
-[2025-11-10T06:51:07.519Z] [LOG] 
-[YT] Canal: @nikesb
-[2025-11-10T06:51:07.520Z] [LOG] [YT] Video: Nike SB | Best of 2024  (id=4gpTco1KyMA, age=9999d)
-[2025-11-10T06:51:07.528Z] [LOG] 🗃️ (SCRAPE CACHE) Reutilizando lista do canal: https://www.youtube.com/@nikesb
-[2025-11-10T06:51:07.530Z] [LOG] ✅ (PRELOAD) Já existe HLS para: 4gpTco1KyMA
-[2025-11-10T06:51:07.571Z] [LOG] 🗃️ (SCRAPE CACHE) Reutilizando lista do canal: https://www.youtube.com/@nikesb
-[2025-11-10T06:51:08.932Z] [LOG] 🗃️ (SCRAPE CACHE) Reutilizando lista do canal: https://www.youtube.com/@nikesb
-[2025-11-10T06:51:08.933Z] [LOG] [STREAM] Nenhum pipeline ativo para encerrar.
-[2025-11-10T06:51:08.934Z] [LOG] [YT] Indo para o próximo vídeo (id=4gpTco1KyMA). Encerrados: ffmpeg=0, yt-dlp=0
-[2025-11-10T06:51:08.934Z] [LOG] 
-[YT] Canal: @nikesb
-[2025-11-10T06:51:08.934Z] [LOG] [YT] Video: Nike SB | Best of 2024  (id=4gpTco1KyMA, age=9999d)
-[2025-11-10T06:51:08.935Z] [LOG] 🗃️ (SCRAPE CACHE) Reutilizando lista do canal: https://www.youtube.com/@nikesb
-[2025-11-10T06:51:08.937Z] [LOG] ✅ (PRELOAD) Já existe HLS para: 4gpTco1KyMA
-[2025-11-10T06:51:08.949Z] [LOG] 🗃️ (SCRAPE CACHE) Reutilizando lista do canal: https://www.youtube.com/@nikesb
+[2025-11-12T02:29:05.775Z] [LOG] [YT] Video: BEST OF BMX Dirt Best Trick | X Games Salt Lake City 2025  (id=10YP4JWm5XU, age=9999d)
+[2025-11-12T02:29:05.775Z] [LOG] 🗃️ (SCRAPE CACHE) Reutilizando lista do canal: https://www.youtube.com/@XGames
+[2025-11-12T02:29:05.777Z] [LOG] ⏳ (PRELOAD) Gerando HLS do próximo vídeo: Czq_C1wiBxA
+[2025-11-12T02:29:13.525Z] [LOG] ⚠️ (PRELOAD) Falha ao gerar HLS para Czq_C1wiBxA: Command failed: ffmpeg -y -i https://rr5---sn-8p8v-bg0ld.googlevideo.com/videoplayback?expire=1762936151&ei=9_ATaeyjCJi3-LAP2sXVsAM&ip=189.46.72.242&id=o-AKsbFZapgvH3pE3xXYhMl80CZPXtzteSnc0mLMgloFbU&itag=398&aitags=133%2C134%2C135%2C136%2C137%2C160%2C242%2C243%2C244%2C247%2C248%2C278%2C356%2C394%2C395%2C396%2C397%2C398%2C399%2C721&source=youtube&requiressl=yes&xpc=EgVo2aDSNQ%3D%3D&cps=40&met=1762914551%2C&mh=Px&mm=31%2C29&mn=sn-8p8v-bg0ld%2Csn-8p8v-bg0ls&ms=au%2Crdu&mv=m&mvi=5&pl=24&rms=au%2Cau&ctier=A&pfa=5&initcwndbps=387500&hightc=yes&siu=1&bui=AdEuB5QG4nOz775s6OY0kjM_FmXLB7k-U-Q4NcTg6ZQwJQX2IG1No3RrhcaSAzvGx7ONbm0uYw&vprv=1&svpuc=1&mime=video%2Fmp4&ns=004qoZ6THZRSFsbz1tya28AQ&rqh=1&gir=yes&clen=101667413&dur=863.262&lmt=1762803897811010&mt=1762914069&fvip=4&keepalive=yes&lmw=1&fexp=51557447%2C51565116%2C51565682%2C51580970&c=TVHTML5&sefc=1&txp=5537534&n=p6vDYAVvNSxhVA&sparams=expire%2Cei%2Cip%2Cid%2Caitags%2Csource%2Crequiressl%2Cxpc%2Cctier%2Cpfa%2Chightc%2Csiu%2Cbui%2Cvprv%2Csvpuc%2Cmime%2Cns%2Crqh%2Cgir%2Cclen%2Cdur%2Clmt&sig=AJfQdSswRQIhAILLNv_TOsNIDQv5ALCraHPExxm6u_4FTAbLlpDKUbC-AiBWZyl_NH9UOJmzi22slLLUhfqJRIN3b2KgYv7F_I283g%3D%3D&lsparams=cps%2Cmet%2Cmh%2Cmm%2Cmn%2Cms%2Cmv%2Cmvi%2Cpl%2Crms%2Cinitcwndbps&lsig=APaTxxMwRAIgRSTcT53vycmc33HPIwyzIqVNrFCDfPiXFLePYv4zcYUCIDQ8R-5HUw_onYq8qmLRF17O__BCPiPYoAB7qh4cVCZk -c:v libx264 -preset veryfast -crf 23 -pix_fmt yuv420p -profile:v main -force_key_frames expr:gte(t,n_forced*6) -an -start_number 0 -hls_time 6 -hls_list_size 0 -hls_playlist_type event -hls_flags independent_segments+append_list -hls_segment_filename C:\PROJETOS\smart-video-autoplay\stream\Czq_C1wiBxA\Czq_C1wiBxA_%03d.ts C:\PROJETOS\smart-video-autoplay\stream\Czq_C1wiBxA\Czq_C1wiBxA.m3u8
+[2025-11-12T02:29:13.817Z] [LOG] [SCRAPER] Aviso: 'gridVideoRenderer' não encontrado (usando ytInitialData)
+[2025-11-12T02:29:13.830Z] [LOG] 🗃️ (SCRAPE CACHE) Reutilizando lista do canal: https://www.youtube.com/@XGames
+[2025-11-12T02:29:59.327Z] [LOG] [STREAM] Parando ffmpeg do id=10YP4JWm5XU (pid=16580)

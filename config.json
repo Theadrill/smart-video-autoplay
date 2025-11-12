@@ -13,7 +13,7 @@
   "maxConcurrentConversions": 2,
   "urls": ["https://www.youtube.com/@nikesb"],
   "includeKeywords": ["Best of", "Highlights", "Top moments", "Series", "Top 3"],
-  "excludeKeywords": ["Trailer", "Preview", "Podcast", "Invite", "PÊNALTIS"],
+  "excludeKeywords": ["Trailer", "Preview", "Podcast", "Invite", "PÊNALTIS", "crew"],
   "minDurationSeconds": 182,
   "ignoreShorts": true,
   "originalFolderForMergeSplit": "F:\\VIDEOS PARA TELÃO\\downloads",
@@ -26,6 +26,9 @@
   "local": false,
   "streamUrls": [
     "https://www.youtube.com/@nikesb",
-    "https://www.youtube.com/@XGames"
+    "https://www.youtube.com/@XGames",
+    "https://www.youtube.com/@RedBullSurfing",
+    "https://www.youtube.com/@FutebolNacional",
+    "https://www.youtube.com/@monstertruckreels"
   ]
 }

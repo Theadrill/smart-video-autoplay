@@ -211,7 +211,7 @@ async function previousVideo(){
     await p.play().catch(()=>{})
     awaitingFirstFrame=true; await p.play().catch(()=>{})
     try { setLoaderVisible(false) } catch{}
-  }
+  } catch{}
 }
 
 // Dev HUD (toggle with 'H') — opcional
