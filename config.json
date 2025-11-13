@@ -16,6 +16,6 @@
     "minutesLessThan": 12,
     "partsIfLess": 2,
     "partsIfMore": 3,
-    "minutesMoreThan": 35,
+    "minutesMoreThan": 34,
     "bigVideoParts": 4
 }
