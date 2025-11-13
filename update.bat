@@ -16,7 +16,7 @@ for /f "delims=" %%G in ('where git 2^>nul') do (
 
 echo ❌ Git não encontrado no PATH.
 echo Instale o Git for Windows para continuar.
-pause
+timeout /t 5 >nul
 exit /b
 
 :foundgit
@@ -29,7 +29,7 @@ REM ==============================
 if not exist ".git" (
     echo ❌ Esta pasta nao é um repositório Git.
     echo Coloque este BAT dentro de um repositório clonado.
-    pause
+    timeout /t 5 >nul
     exit /b
 )
 
@@ -48,4 +48,10 @@ echo 🔄 Atualizando repositório com git pull...
 
 echo.
 echo ✔ Repositório atualizado com sucesso!
-pause
+
+REM ==============================
+REM  ESPERA 5 SEGUNDOS E FECHA
+REM ==============================
+echo Fechando em 5 segundos...
+timeout /t 5 >nul
+exit
