@@ -1,34 +1,51 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
-    <head>
-        <meta charset="UTF-8" />
-        <title>Smart Local Autoplay</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <link rel="stylesheet" href="styles.css" />
-    </head>
-    <body>
-        <div id="player-container">
-            <!-- Metade esquerda (voltar) -->
-            <div id="click-left"></div>
+<head>
+    <meta charset="UTF-8" />
+    <title>Smart Local Autoplay</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+    <div id="player-container">
+        <!-- Metade esquerda (voltar) -->
+        <div id="click-left"></div>
 
-            <!-- Metade direita (avançar) -->
-            <div id="click-right"></div>
+        <!-- Metade direita (avançar) -->
+        <div id="click-right"></div>
 
-            <!-- Player de vídeo -->
-            <video id="player" autoplay muted playsinline></video>
+        <!-- Player de vídeo -->
+        <video id="player" autoplay muted playsinline></video>
 
-            <!-- Barra de progresso -->
+        <!-- HUD de Controles -->
+        <div id="hud-controls">
+            <div class="hud-backdrop"></div>
+            
+            <!-- Barra de progresso integrada na HUD -->
             <div id="progress">
                 <div class="fill"></div>
             </div>
+            
+            <div class="controls-container">
+                <button id="btn-rewind" class="control-btn">
+                    <img src="/icons/previous.png" alt="Voltar ao início" class="control-icon">
+                </button>
+                <button id="btn-play-pause" class="control-btn">
+                    <img src="/icons/play.png" alt="Play/Pause" class="control-icon play-icon">
+                    <img src="/icons/pause.png" alt="Play/Pause" class="control-icon pause-icon" style="display: none;">
+                </button>
+                <button id="btn-next" class="control-btn">
+                    <img src="/icons/next.png" alt="Próximo vídeo" class="control-icon">
+                </button>
+            </div>
         </div>
+    </div>
 
-        <div id="no-videos">
-    Nenhum vídeo disponível.<br>
-    Copie arquivos .mp4 para a pasta configurada e aguarde...
-</div>
+    <div id="no-videos">
+        Nenhum vídeo disponível.<br>
+        Copie arquivos .mp4 para a pasta configurada e aguarde...
+    </div>
 
-
-        <script src="main.js"></script>
-    </body>
+    <script src="main.js"></script>
+</body>
 </html>

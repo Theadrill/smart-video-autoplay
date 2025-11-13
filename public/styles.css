@@ -5,12 +5,15 @@ body {
     background: black;
     height: 100%;
     overflow: hidden;
+    width: 100%;
 }
 
 #player-container {
     position: fixed;
     inset: 0;
     background: black;
+    width: 100%;
+    height: 100%;
 }
 
 /* O vídeo fica atrás e NÃO captura cliques */
@@ -18,7 +21,7 @@ video {
     width: 100%;
     height: 100%;
     object-fit: cover;
-    pointer-events: none; /* 👈 ESSENCIAL para a barra e metades funcionarem */
+    pointer-events: none;
 }
 
 /* Metades de clique */
@@ -29,7 +32,7 @@ video {
     width: 50%;
     height: 100%;
     z-index: 10;
-    pointer-events: auto; /* recebem clique */
+    pointer-events: auto;
 }
 
 #click-left {
@@ -41,38 +44,10 @@ video {
 
 video,
 #click-left,
-#click-right,
-#progress {
+#click-right {
     user-select: none;
     -webkit-user-select: none;
     -webkit-touch-callout: none;
-}
-
-/* Barra de progresso */
-#progress {
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    height: 65px;
-    background: rgb(78, 78, 78);
-    opacity: 0;
-    transition: none; /* 👈 Sem fade para máximo desempenho */
-    z-index: 20;
-    pointer-events: auto;
-}
-
-#progress.visible {
-    opacity: 1;
-}
-
-/* Preenchimento */
-#progress .fill {
-    height: 100%;
-    width: 0%;
-    background: #5ddf6e;
-    opacity: 0.9;
-    /* Sem transição → atualiza instantâneo */
 }
 
 /* 👇 Cursor auto-hide */
@@ -99,4 +74,285 @@ video,
 
 #no-videos.visible {
     opacity: 1;
+}
+
+/* HUD de Controles */
+#hud-controls {
+    position: absolute;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    z-index: 30;
+    pointer-events: none;
+    box-sizing: border-box;
+    padding: 20px;
+}
+
+#hud-controls.visible {
+    display: flex;
+}
+
+.hud-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(8px);
+}
+
+/* Barra de progresso integrada na HUD */
+#progress {
+    position: absolute;
+    left: 5%;
+    right: 5%;
+    bottom: 130px;
+    height: 35px;
+    background: rgba(255, 255, 255, 0.3);
+    opacity: 0;
+    border-radius: 17px;
+    z-index: 35;
+    pointer-events: auto;
+    transition: opacity 0.3s ease;
+    overflow: hidden;
+    cursor: pointer;
+    max-width: 90%;
+    box-sizing: border-box;
+}
+
+#progress.visible {
+    opacity: 1;
+}
+
+/* Preenchimento da barra de progresso */
+#progress .fill {
+    height: 100%;
+    width: 0%;
+    background: #5ddf6e;
+    border-radius: 17px;
+    transition: width 0.1s linear;
+}
+
+.controls-container {
+    position: relative;
+    display: flex;
+    gap: 40px;
+    align-items: center;
+    z-index: 31;
+    pointer-events: auto;
+    margin-top: 80px;
+    flex-wrap: wrap;
+    justify-content: center;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+.control-btn {
+    width: 120px;
+    height: 120px;
+    border: none;
+    border-radius: 60px;
+    background: rgba(40, 40, 40, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(10px);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    flex-shrink: 0;
+}
+
+.control-btn:hover {
+    transform: scale(1.15);
+    background: rgba(60, 60, 60, 0.8);
+    border-color: rgba(255, 255, 255, 0.5);
+    box-shadow: 0 15px 40px rgba(0, 0, 0, 0.7);
+}
+
+.control-btn:active {
+    transform: scale(0.95);
+}
+
+.control-icon {
+    width: 60px;
+    height: 60px;
+    pointer-events: none;
+    object-fit: contain;
+    filter: brightness(0) invert(1);
+}
+
+/* Estados dos ícones de play/pause */
+.pause-icon {
+    display: none !important;
+}
+
+.playing .play-icon {
+    display: none !important;
+}
+
+.playing .pause-icon {
+    display: block !important;
+}
+
+/* Ajustes para telas menores */
+@media (max-width: 1200px) {
+    .controls-container {
+        gap: 30px;
+    }
+    
+    .control-btn {
+        width: 110px;
+        height: 110px;
+    }
+    
+    .control-icon {
+        width: 55px;
+        height: 55px;
+    }
+    
+    #progress {
+        bottom: 110px;
+        height: 32px;
+    }
+}
+
+@media (max-width: 768px) {
+    .controls-container {
+        gap: 25px;
+        margin-top: 70px;
+    }
+    
+    .control-btn {
+        width: 100px;
+        height: 100px;
+        border-radius: 50px;
+    }
+    
+    .control-icon {
+        width: 50px;
+        height: 50px;
+    }
+    
+    #progress {
+        bottom: 100px;
+        left: 10px;
+        right: 10px;
+        height: 30px;
+        border-radius: 15px;
+    }
+    
+    #progress .fill {
+        border-radius: 15px;
+    }
+}
+
+@media (max-width: 600px) {
+    .controls-container {
+        gap: 20px;
+        margin-top: 60px;
+    }
+    
+    .control-btn {
+        width: 90px;
+        height: 90px;
+        border-radius: 45px;
+    }
+    
+    .control-icon {
+        width: 45px;
+        height: 45px;
+    }
+    
+    #progress {
+        bottom: 90px;
+        left: 8px;
+        right: 8px;
+        height: 28px;
+        border-radius: 14px;
+    }
+    
+    #progress .fill {
+        border-radius: 14px;
+    }
+}
+
+@media (max-width: 480px) {
+    .controls-container {
+        gap: 15px;
+        margin-top: 50px;
+    }
+    
+    .control-btn {
+        width: 80px;
+        height: 80px;
+        border-radius: 40px;
+    }
+    
+    .control-icon {
+        width: 40px;
+        height: 40px;
+    }
+    
+    #progress {
+        bottom: 80px;
+        left: 5px;
+        right: 5px;
+        height: 25px;
+        border-radius: 12px;
+    }
+    
+    #progress .fill {
+        border-radius: 12px;
+    }
+}
+
+/* Ajustes para telas muito pequenas */
+@media (max-height: 600px) {
+    #progress {
+        bottom: 70px;
+        height: 20px;
+    }
+    
+    .controls-container {
+        margin-top: 50px;
+    }
+    
+    .control-btn {
+        width: 70px;
+        height: 70px;
+    }
+    
+    .control-icon {
+        width: 35px;
+        height: 35px;
+    }
+}
+
+/* Ajustes para telas muito largas */
+@media (min-width: 2000px) {
+    .controls-container {
+        gap: 60px;
+    }
+    
+    .control-btn {
+        width: 150px;
+        height: 150px;
+        border-radius: 75px;
+    }
+    
+    .control-icon {
+        width: 70px;
+        height: 70px;
+    }
+    
+    #progress {
+        height: 40px;
+        border-radius: 20px;
+    }
+    
+    #progress .fill {
+        border-radius: 20px;
+    }
 }

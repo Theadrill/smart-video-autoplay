@@ -11,7 +11,7 @@ async function nextVideo() {
     if (!data.file) {
         console.log("⚠️ Nenhum vídeo disponível no servidor.")
         noVideos.classList.add("visible")
-        player.src = "" // garante que pare o vídeo atual caso exista
+        player.src = ""
         return
     }
 
@@ -24,7 +24,6 @@ async function nextVideo() {
         console.log("⚠️ player.play() falhou, tentando novamente.")
     })
 }
-
 
 // ==========================================================
 // ⏪ Função: Vídeo anterior
@@ -97,43 +96,17 @@ player.addEventListener("timeupdate", () => {
     progressFill.style.width = (player.currentTime / player.duration) * 100 + "%"
 })
 
-function showProgressBar() {
-    progress.classList.add("visible")
-    scheduleCursorHide()
-}
-
 function seekAt(clientX) {
     const r = progress.getBoundingClientRect()
     const pct = (clientX - r.left) / r.width
     if (player.duration) player.currentTime = pct * player.duration
-    showProgressBar()
 }
 
 progress.addEventListener("click", (e) => seekAt(e.clientX), { passive: true })
 progress.addEventListener("touchstart", (e) => seekAt(e.touches[0].clientX), { passive: true })
 
-let hideProgressTimeout = null
-
-function showProgressBar() {
-    progress.classList.add("visible")
-
-    // Se estava sendo escondida, cancela
-    if (hideProgressTimeout) clearTimeout(hideProgressTimeout)
-
-    // Agenda esconder
-    hideProgressTimeout = setTimeout(() => {
-        progress.classList.remove("visible")
-    }, 1500)
-
-    // Também mostra cursor e agenda esconder cursor
-    scheduleCursorHide()
-}
-
-container.addEventListener("mousemove", showProgressBar, { passive: true })
-container.addEventListener("touchmove", showProgressBar, { passive: true })
-
 // ==========================================================
-// 🖱 Cursor desaparece após inatividade + durante seek
+// 🖱 Cursor desaparece após inatividade
 // ==========================================================
 let cursorTimeout = null
 
@@ -149,6 +122,114 @@ container.addEventListener("mousemove", scheduleCursorHide, { passive: true })
 container.addEventListener("touchstart", scheduleCursorHide, { passive: true })
 document.addEventListener("fullscreenchange", scheduleCursorHide)
 
-// Durante clique na barra → cursor some imediatamente
-progress.addEventListener("mousedown", () => document.body.classList.add("hide-cursor"))
-progress.addEventListener("mouseup", scheduleCursorHide)
+// ==========================================================
+// 🎛 HUD DE CONTROLES
+// ==========================================================
+const hudControls = document.getElementById('hud-controls')
+const btnRewind = document.getElementById('btn-rewind')
+const btnPlayPause = document.getElementById('btn-play-pause')
+const btnNext = document.getElementById('btn-next')
+
+let hudTimeout = null
+let isHudVisible = false
+
+// Mostrar/ocultar HUD (controla barra também)
+function showHud() {
+    if (isHudVisible) return
+    
+    hudControls.classList.add('visible')
+    progress.classList.add('visible') // Barra aparece com a HUD
+    isHudVisible = true
+    scheduleHudHide()
+    scheduleCursorHide()
+}
+
+function hideHud() {
+    hudControls.classList.remove('visible')
+    progress.classList.remove('visible') // Barra some com a HUD
+    isHudVisible = false
+}
+
+function scheduleHudHide() {
+    clearTimeout(hudTimeout)
+    hudTimeout = setTimeout(hideHud, 3000)
+}
+
+// Alternar play/pause
+function togglePlayPause() {
+    if (player.paused) {
+        player.play()
+        btnPlayPause.classList.add('playing')
+    } else {
+        player.pause()
+        btnPlayPause.classList.remove('playing')
+    }
+    showHud()
+}
+
+// Voltar ao início
+function rewindToStart() {
+    player.currentTime = 0
+    showHud()
+}
+
+// Event listeners dos botões
+btnRewind.addEventListener('click', rewindToStart)
+btnPlayPause.addEventListener('click', togglePlayPause)
+btnNext.addEventListener('click', () => {
+    nextVideo()
+    showHud()
+})
+
+// Atualizar ícone do play/pause baseado no estado do vídeo
+player.addEventListener('play', () => {
+    btnPlayPause.classList.add('playing')
+})
+
+player.addEventListener('pause', () => {
+    btnPlayPause.classList.remove('playing')
+})
+
+// Mostrar HUD ao tocar na tela (áreas não clicáveis)
+container.addEventListener('click', (e) => {
+    if (!e.target.closest('#click-left') && 
+        !e.target.closest('#click-right')) {
+        showHud()
+    }
+})
+
+// Mostrar HUD também ao mover mouse/tocar
+container.addEventListener('mousemove', showHud, { passive: true })
+container.addEventListener('touchmove', showHud, { passive: true })
+
+// Esconder HUD quando vídeo terminar
+player.addEventListener('ended', () => {
+    hideHud()
+})
+
+// Inicializar ícone correto
+if (!player.paused) {
+    btnPlayPause.classList.add('playing')
+}
+
+// Cancelar hide da HUD quando interagir com controles
+hudControls.addEventListener('mousemove', (e) => {
+    e.stopPropagation()
+    scheduleHudHide()
+})
+
+hudControls.addEventListener('touchmove', (e) => {
+    e.stopPropagation()
+    scheduleHudHide()
+})
+
+// Cancelar hide da HUD quando interagir com a barra
+progress.addEventListener('mousemove', (e) => {
+    e.stopPropagation()
+    scheduleHudHide()
+})
+
+progress.addEventListener('touchmove', (e) => {
+    e.stopPropagation()
+    scheduleHudHide()
+})
