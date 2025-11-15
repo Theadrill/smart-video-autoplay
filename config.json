@@ -5,7 +5,7 @@
     "generateRandomNames": true,
     "maxVideosPerChannelPerRound": 3,
     "maxConcurrentDownloads": 4,
-    "maxConcurrentConversions": 2,
+    "maxConcurrentConversions": 1,
     "urls": [
         "https://www.youtube.com/@MNcompsJR3",
         "https://www.youtube.com/@monstertruckreels",
