@@ -411,7 +411,22 @@ async function handleDownloadJob(job) {
         job.infoLoaded = true
     }
 
-    console.log(`vídeo ${index} de ${total} — Baixando: ${job.titulo}`)
+    
+
+    let durText = "";
+if (job.video?.duration) {
+    const dur = job.video.duration;
+    const min = Math.floor(dur / 60);
+    const sec = dur % 60;
+
+    const durFormatado =
+        min > 0 ? `${min}m ${sec.toString().padStart(2, "0")}s` : `${sec}s`;
+
+    durText = ` — ⏱️ ${durFormatado}`;
+}
+
+console.log(`vídeo ${index} de ${total} — Baixando: ${job.titulo}${durText}`);
+
 
     const ok = await download(id, job.tempFile, false)
     if (!ok) {
